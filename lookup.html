@@ -372,6 +372,11 @@ body {
   <div id="scanStatus" style="position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:.72rem;color:rgba(255,255,255,.8);letter-spacing:.05em">Align QR code within the frame</div>
 </div>
     <button class="btn-stop" id="btnStop" style="display:none" onclick="stopScanner()">✕ Stop Scanning</button>
+    <div id="topTools" class="top-tools">
+      <button onclick="showHistory()">History</button>
+      <button onclick="showAnalytics()">Analytics</button>
+      <button onclick="downloadDailyExcel()">Download Daily Excel</button>
+    </div>
     <div class="fg">
       <label>Unique Code / Jewel Code</label>
       <div class="acw">
@@ -397,9 +402,9 @@ body {
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script src="cloud-config.js"></script>
-<script src="data.js"></script>
-<script src="images.js"></script>
-<script src="app.js"></script>
+<script src="cloud-config.js?v=20260527a"></script>
+<script src="data.js?v=20260527a"></script>
+<script src="images.js?v=20260527a"></script>
+<script src="app.js?v=20260527a"></script>
 </body>
 </html>
