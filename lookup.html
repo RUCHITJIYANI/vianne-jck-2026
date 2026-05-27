@@ -24,6 +24,9 @@ body{font-family:'DM Sans',sans-serif;background:#EEF5F2;color:var(--ink);min-he
 header{background:var(--teal);padding:16px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 16px rgba(0,0,0,.4)}
 header h1{font-family:'DM Sans',sans-serif;color:var(--gold-light);font-size:1.1rem;letter-spacing:.2em;font-weight:700}
 header .sub{font-size:.66rem;color:rgba(197,212,207,.7);letter-spacing:.15em;text-transform:uppercase}.tagline{font-size:.58rem;color:rgba(197,212,207,.6);letter-spacing:.18em;text-transform:uppercase;margin-top:1px}
+.header-tools{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.header-tools button{border:1px solid rgba(214,232,226,.35);background:rgba(13,31,26,.35);color:#dfeee8;padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer}
+.header-tools button:hover{background:rgba(13,31,26,.55)}
 .app{max-width:1160px;margin:0 auto;padding:26px 16px 60px;display:grid;grid-template-columns:330px 1fr;gap:26px;align-items:start;width:100%}
 .panel{background:var(--warm);border:1px solid var(--border);border-radius:14px;padding:22px;box-shadow:0 2px 16px var(--shadow);width:100%;min-width:0}
 .panel-title{font-family:'DM Sans',sans-serif;font-size:.82rem;color:var(--teal);margin-bottom:18px;display:flex;align-items:center;gap:8px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
@@ -118,6 +121,7 @@ input.found{border-color:var(--teal)}
   header{padding:13px 18px}
   header h1{font-size:.95rem;letter-spacing:.15em}
   .tagline{display:none}
+  .header-tools{margin-top:0}
   .ch h2{font-size:1.15rem}
   .ph-val{font-size:2.2rem}
   .pg{grid-template-columns:1fr 1fr}
@@ -130,6 +134,7 @@ input.found{border-color:var(--teal)}
   header h1{font-size:.85rem;letter-spacing:.12em}
   header .sub{font-size:.58rem}
   .app{padding:12px 10px 36px;gap:14px}
+  .header-tools button{padding:5px 8px;font-size:11px}
   .panel{padding:16px 14px;border-radius:12px}
   .rc{border-radius:12px}
   .ch{padding:14px 16px}
@@ -343,6 +348,10 @@ body {
     <div>
       <h1>VIANNE JEWELS</h1>
       <div class="tagline">THE SIGNATURE OF AFFORDABLE SOPHISTICATION</div>
+      <div id="topTools" class="header-tools">
+        <button onclick="showHistory()">History</button>
+        <button onclick="showAnalytics()">Analytics</button>
+      </div>
     </div>
   </div>
   <span class="sub">JCK 2026 · 452 Items</span>
@@ -372,11 +381,6 @@ body {
   <div id="scanStatus" style="position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:.72rem;color:rgba(255,255,255,.8);letter-spacing:.05em">Align QR code within the frame</div>
 </div>
     <button class="btn-stop" id="btnStop" style="display:none" onclick="stopScanner()">✕ Stop Scanning</button>
-    <div id="topTools" class="top-tools">
-      <button onclick="showHistory()">History</button>
-      <button onclick="showAnalytics()">Analytics</button>
-      <button onclick="downloadDailyExcel()">Download Daily Excel</button>
-    </div>
     <div class="fg">
       <label>Unique Code / Jewel Code</label>
       <div class="acw">

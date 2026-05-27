@@ -254,6 +254,20 @@ function render(){
 </div>`;
 }
 
+function showInsightsCard(title,bodyHtml){
+  document.getElementById('emptyState').style.display='none';
+  const card=document.getElementById('rc');
+  card.classList.add('show');
+  card.innerHTML=`
+<div class="ch">
+  <div><h2>${esc(title)}</h2><div class="sc">Sales intelligence</div></div>
+  <span class="badge">Insights</span>
+</div>
+<div class="ins-body">
+  ${bodyHtml}
+</div>`;
+}
+
 // ── SCANNER VARIABLES ─────────────────────────────────────────────────────
 let scanStream = null;
 let scanAnimFrame = null;
@@ -460,26 +474,16 @@ function ensureEnhancementStyles(){
   .track-actions{display:flex;gap:8px;flex-wrap:wrap}
   .mini-btn{background:#c9a84c;color:#102620;border:none;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer}
   .mini-btn.ghost{background:#293e39;color:#d6e6e0;border:1px solid #4b6961}
-  .vx-modal{position:fixed;inset:0;background:rgba(5,13,11,.65);display:flex;align-items:center;justify-content:center;padding:18px;z-index:9999}
-  .vx-box{width:min(760px,100%);max-height:85vh;overflow:auto;background:#0f2f29;border:1px solid #3c625a;border-radius:14px;padding:14px;color:#e9f2ee}
-  .vx-head{display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;background:#0f2f29;padding-bottom:8px}
-  .vx-close{border:1px solid #42675f;background:#153d35;color:#d9ebe4;border-radius:8px;padding:6px 10px;cursor:pointer}
+  .ins-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .ins-btn{border:1px solid #42675f;background:#153d35;color:#d9ebe4;border-radius:8px;padding:6px 10px;cursor:pointer}
+  .ins-note{font-size:12px;opacity:.75;margin:6px 0 10px}
+  .ins-body{padding-top:6px}
   .vx-list{margin:10px 0 0;padding:0;list-style:none}
   .vx-list li{padding:8px 10px;border-bottom:1px solid rgba(119,160,149,.2);font-size:13px}
   .vx-empty{opacity:.72;font-size:13px;padding:8px 0}
   `;
   document.head.appendChild(st);
 }
-function openModal(title,innerHtml){
-  closeModal();
-  const wrap=document.createElement('div');
-  wrap.className='vx-modal';
-  wrap.id='vxModal';
-  wrap.innerHTML=`<div class="vx-box"><div class="vx-head"><h3>${esc(title)}</h3><button class="vx-close" onclick="closeModal()">Close</button></div>${innerHtml}</div>`;
-  wrap.addEventListener('click',(e)=>{if(e.target===wrap) closeModal();});
-  document.body.appendChild(wrap);
-}
-function closeModal(){const m=document.getElementById('vxModal');if(m)m.remove();}
 function sameDay(ts,yyyyMmDd){return ts.slice(0,10)===yyyyMmDd;}
 function todayKey(){return new Date().toISOString().slice(0,10);}
 function buildHistoryHtml(events,title){
@@ -491,7 +495,10 @@ async function showHistory(){
   const cloudEvents=await fetchCloudEvents();
   const all=(cloudEvents.length?cloudEvents:localEvents).filter(e=>e.type==='search').slice(-200).reverse();
   const mode=cloudEvents.length?'All Devices':'This Device';
-  openModal(`${mode} Lookup History`,buildHistoryHtml(all));
+  showInsightsCard(
+    `${mode} Lookup History`,
+    `<div class="ins-head"><div class="ins-note">Recent lookups appear here in the same side panel as product details.</div><button class="ins-btn" onclick="clearResult()">Back</button></div>${buildHistoryHtml(all)}`
+  );
 }
 function buildAnalyticsHtml(events,orders,mode){
   const counts={};
@@ -509,7 +516,10 @@ async function showAnalytics(){
   const useCloud=cloudEvents.length>0||Object.keys(cloudOrders).length>0;
   const events=(useCloud?dedupeEvents(cloudEvents):localEvents).filter(e=>e.type==='search');
   const orders=useCloud?cloudOrders:getOrders();
-  openModal(useCloud?'All Devices Analytics':'Device Analytics',buildAnalyticsHtml(events,orders,useCloud?'All Devices':'This Device'));
+  showInsightsCard(
+    useCloud?'All Devices Analytics':'Device Analytics',
+    `<div class="ins-head"><div class="ins-note">Top searched products and order status summary.</div><div><button class="ins-btn" onclick="downloadDailyExcel()">Download Excel</button> <button class="ins-btn" onclick="clearResult()">Back</button></div></div>${buildAnalyticsHtml(events,orders,useCloud?'All Devices':'This Device')}`
+  );
 }
 function injectTopTools(){
   ensureEnhancementStyles();
@@ -523,7 +533,7 @@ function injectTopTools(){
   bar.innerHTML=`
     <button onclick="showHistory()">History</button>
     <button onclick="showAnalytics()">Analytics</button>
-    <button onclick="downloadDailyExcel()">Download Daily Excel</button>
+    <button onclick="downloadDailyExcel()">Download All Devices Excel</button>
   `;
   host.appendChild(bar);
 }
