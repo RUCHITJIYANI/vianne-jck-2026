@@ -482,6 +482,10 @@ function ensureEnhancementStyles(){
   .ins-btn{border:1px solid #42675f;background:#153d35;color:#d9ebe4;border-radius:8px;padding:6px 10px;cursor:pointer}
   .ins-note{font-size:12px;opacity:.75;margin:6px 0 10px}
   .ins-body{padding-top:6px}
+  .ins-btn.on{background:#2a5b50;border-color:#7ea99c}
+  .flt-row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 10px}
+  .flt-custom{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px}
+  .flt-custom input[type=date]{padding:6px 8px;border-radius:8px;border:1px solid #4e7068;background:#102f29;color:#dfeee8}
   .hist-link{cursor:pointer}
   .hist-link:hover{background:rgba(201,168,76,.12)}
   .chart-wrap{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0}
@@ -497,6 +501,56 @@ function ensureEnhancementStyles(){
 }
 function sameDay(ts,yyyyMmDd){return ts.slice(0,10)===yyyyMmDd;}
 function todayKey(){return new Date().toISOString().slice(0,10);}
+const FILTER_STATE={mode:'today',from:'',to:''};
+function daysAgoKey(n){const d=new Date();d.setDate(d.getDate()-n);return d.toISOString().slice(0,10);}
+function normalizeDateInput(v){return String(v||'').slice(0,10);}
+function inSelectedRange(ts){
+  const day=String(ts||'').slice(0,10);
+  const mode=FILTER_STATE.mode;
+  if(mode==='today') return day===todayKey();
+  if(mode==='last7') return day>=daysAgoKey(6) && day<=todayKey();
+  const from=normalizeDateInput(FILTER_STATE.from)||daysAgoKey(6);
+  const to=normalizeDateInput(FILTER_STATE.to)||todayKey();
+  return day>=from && day<=to;
+}
+function currentRangeText(){
+  if(FILTER_STATE.mode==='today') return `Today (${todayKey()})`;
+  if(FILTER_STATE.mode==='last7') return `Last 7 Days (${daysAgoKey(6)} to ${todayKey()})`;
+  const from=normalizeDateInput(FILTER_STATE.from)||daysAgoKey(6);
+  const to=normalizeDateInput(FILTER_STATE.to)||todayKey();
+  return `Custom (${from} to ${to})`;
+}
+function setFilterMode(mode){
+  FILTER_STATE.mode=mode;
+  if(mode==='today'||mode==='last7'){FILTER_STATE.from='';FILTER_STATE.to='';}
+  if(mode==='custom'){
+    if(!FILTER_STATE.from) FILTER_STATE.from=daysAgoKey(6);
+    if(!FILTER_STATE.to) FILTER_STATE.to=todayKey();
+  }
+}
+function setCustomRange(){
+  const fromEl=document.getElementById('fltFrom');
+  const toEl=document.getElementById('fltTo');
+  if(fromEl) FILTER_STATE.from=normalizeDateInput(fromEl.value);
+  if(toEl) FILTER_STATE.to=normalizeDateInput(toEl.value);
+}
+function buildRangeControls(reloadFnName){
+  const isCustom=FILTER_STATE.mode==='custom';
+  const from=normalizeDateInput(FILTER_STATE.from)||daysAgoKey(6);
+  const to=normalizeDateInput(FILTER_STATE.to)||todayKey();
+  return `
+  <div class="flt-row">
+    <button class="ins-btn ${FILTER_STATE.mode==='today'?'on':''}" onclick="setFilterMode('today');${reloadFnName}()">Today</button>
+    <button class="ins-btn ${FILTER_STATE.mode==='last7'?'on':''}" onclick="setFilterMode('last7');${reloadFnName}()">Last 7 Days</button>
+    <button class="ins-btn ${FILTER_STATE.mode==='custom'?'on':''}" onclick="setFilterMode('custom');${reloadFnName}()">Custom</button>
+  </div>
+  <div class="flt-custom" style="display:${isCustom?'flex':'none'}">
+    <input id="fltFrom" type="date" value="${from}"/>
+    <span>to</span>
+    <input id="fltTo" type="date" value="${to}"/>
+    <button class="ins-btn" onclick="setCustomRange();${reloadFnName}()">Apply</button>
+  </div>`;
+}
 function buildHistoryHtml(events,title){
   if(!events.length)return '<div class="vx-empty">No lookups found.</div>';
   return `<ul class="vx-list">${events.map(e=>`<li class="hist-link" onclick="openFromHistory('${esc(String(e.code).replace(/'/g,"\\'"))}')"><strong>${esc(e.code)}</strong> — ${esc(e.meta.design||'')} <br><small>${new Date(e.ts).toLocaleString()}</small></li>`).join('')}</ul>`;
@@ -504,11 +558,11 @@ function buildHistoryHtml(events,title){
 async function showHistory(){
   const localEvents=readStore(STORAGE_KEYS.events,[]).filter(e=>e.type==='search');
   const cloudEvents=await fetchCloudEvents();
-  const all=(cloudEvents.length?cloudEvents:localEvents).filter(e=>e.type==='search').slice(-200).reverse();
+  const all=(cloudEvents.length?cloudEvents:localEvents).filter(e=>e.type==='search').filter(e=>inSelectedRange(e.ts)).slice(-200).reverse();
   const mode=cloudEvents.length?'All Devices':'This Device';
   showInsightsCard(
     `${mode} Lookup History`,
-    `<div class="ins-head"><div class="ins-note">Recent lookups appear here in the same side panel as product details.</div><button class="ins-btn" onclick="clearResult()">Back</button></div>${buildHistoryHtml(all)}`
+    `<div class="ins-head"><div class="ins-note">Range: ${currentRangeText()}</div><button class="ins-btn" onclick="clearResult()">Back</button></div>${buildRangeControls('showHistory')}${buildHistoryHtml(all)}`
   );
 }
 function buildAnalyticsHtml(events,orders,mode){
@@ -596,11 +650,11 @@ async function showAnalytics(){
   const cloudEvents=await fetchCloudEvents();
   const cloudOrders=await fetchCloudOrders();
   const useCloud=cloudEvents.length>0||Object.keys(cloudOrders).length>0;
-  const events=(useCloud?dedupeEvents(cloudEvents):localEvents).filter(e=>e.type==='search');
+  const events=(useCloud?dedupeEvents(cloudEvents):localEvents).filter(e=>e.type==='search').filter(e=>inSelectedRange(e.ts));
   const orders=useCloud?cloudOrders:getOrders();
   showInsightsCard(
     useCloud?'All Devices Analytics':'Device Analytics',
-    `<div class="ins-head"><div class="ins-note">Top searched products and order status summary.</div><div><button class="ins-btn" onclick="downloadDailyExcel()">Download Excel</button> <button class="ins-btn" onclick="clearResult()">Back</button></div></div>${buildAnalyticsHtml(events,orders,useCloud?'All Devices':'This Device')}`
+    `<div class="ins-head"><div class="ins-note">Range: ${currentRangeText()}</div><div><button class="ins-btn" onclick="downloadDailyExcel()">Download Excel</button> <button class="ins-btn" onclick="clearResult()">Back</button></div></div>${buildRangeControls('showAnalytics')}${buildAnalyticsHtml(events,orders,useCloud?'All Devices':'This Device')}`
   );
   renderAnalyticsCharts(events).catch((e)=>console.error('Analytics chart render failed',e));
 }
@@ -649,7 +703,7 @@ async function downloadDailyExcel(){
   const cloudEvents=await fetchCloudEvents();
   const cloudOrders=await fetchCloudOrders();
   const useCloud=cloudEvents.length>0||Object.keys(cloudOrders).length>0;
-  const events=(useCloud?dedupeEvents(cloudEvents):localEvents).filter(e=>sameDay(e.ts,date));
+  const events=(useCloud?dedupeEvents(cloudEvents):localEvents).filter(e=>inSelectedRange(e.ts));
   const orders=useCloud?cloudOrders:getOrders();
   const lookupRows=events.filter(e=>e.type==='search').map(e=>[
     e.ts,e.deviceId||getDeviceId(),e.code,e.meta?.design||'',e.meta?.collection||'',e.meta?.style_code||''
@@ -662,14 +716,17 @@ async function downloadDailyExcel(){
     showStatus('No data yet for today on this device.','err');
     return;
   }
-  const fileName=`vianne-report-${date}-${useCloud?'all-devices':'single-device'}.xlsx`;
+  const rangeSlug=FILTER_STATE.mode==='custom'
+    ? `${(normalizeDateInput(FILTER_STATE.from)||daysAgoKey(6)).replace(/-/g,'')}-${(normalizeDateInput(FILTER_STATE.to)||todayKey()).replace(/-/g,'')}`
+    : FILTER_STATE.mode==='last7' ? 'last7days' : date;
+  const fileName=`vianne-report-${rangeSlug}-${useCloud?'all-devices':'single-device'}.xlsx`;
   try{
     await ensureXlsx();
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['timestamp','device_id','code','design','collection','style_code'],...lookupRows]),'Lookups');
     XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['code','status','updated_at','device_id'],...statusRows]),'OrderStatus');
     XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['code','search_count'],...summaryRows]),'TopSearches');
-    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['cloud_mode',useCloud?'enabled':'disabled'],['cloud_status',cloudStatus],['generated_at',nowIso()]]),'Meta');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['cloud_mode',useCloud?'enabled':'disabled'],['cloud_status',cloudStatus],['generated_at',nowIso()],['range',currentRangeText()]]),'Meta');
     XLSX.writeFile(wb,fileName);
     showStatus(`✓ Daily Excel downloaded (${useCloud?'all devices':'this device'})`,'ok');
   } catch(e){
