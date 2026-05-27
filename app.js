@@ -267,6 +267,10 @@ function showInsightsCard(title,bodyHtml){
   ${bodyHtml}
 </div>`;
 }
+function openFromHistory(code){
+  if(!code) return;
+  pick(String(code).toUpperCase());
+}
 
 // ── SCANNER VARIABLES ─────────────────────────────────────────────────────
 let scanStream = null;
@@ -478,6 +482,13 @@ function ensureEnhancementStyles(){
   .ins-btn{border:1px solid #42675f;background:#153d35;color:#d9ebe4;border-radius:8px;padding:6px 10px;cursor:pointer}
   .ins-note{font-size:12px;opacity:.75;margin:6px 0 10px}
   .ins-body{padding-top:6px}
+  .hist-link{cursor:pointer}
+  .hist-link:hover{background:rgba(201,168,76,.12)}
+  .chart-wrap{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0}
+  .chart-card{border:1px solid rgba(119,160,149,.25);border-radius:10px;padding:10px;background:rgba(10,27,23,.22)}
+  .chart-title{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#c8dbd5;margin-bottom:8px}
+  .chart-box{height:220px;position:relative}
+  @media(max-width:740px){.chart-wrap{grid-template-columns:1fr}.chart-box{height:210px}}
   .vx-list{margin:10px 0 0;padding:0;list-style:none}
   .vx-list li{padding:8px 10px;border-bottom:1px solid rgba(119,160,149,.2);font-size:13px}
   .vx-empty{opacity:.72;font-size:13px;padding:8px 0}
@@ -488,7 +499,7 @@ function sameDay(ts,yyyyMmDd){return ts.slice(0,10)===yyyyMmDd;}
 function todayKey(){return new Date().toISOString().slice(0,10);}
 function buildHistoryHtml(events,title){
   if(!events.length)return '<div class="vx-empty">No lookups found.</div>';
-  return `<ul class="vx-list">${events.map(e=>`<li><strong>${esc(e.code)}</strong> — ${esc(e.meta.design||'')} <br><small>${new Date(e.ts).toLocaleString()}</small></li>`).join('')}</ul>`;
+  return `<ul class="vx-list">${events.map(e=>`<li class="hist-link" onclick="openFromHistory('${esc(String(e.code).replace(/'/g,"\\'"))}')"><strong>${esc(e.code)}</strong> — ${esc(e.meta.design||'')} <br><small>${new Date(e.ts).toLocaleString()}</small></li>`).join('')}</ul>`;
 }
 async function showHistory(){
   const localEvents=readStore(STORAGE_KEYS.events,[]).filter(e=>e.type==='search');
@@ -507,7 +518,78 @@ function buildAnalyticsHtml(events,orders,mode){
   const ordSummary={need_order:0,delivered:0};
   Object.values(orders).forEach(o=>{if(o.status==='need_order')ordSummary.need_order++; if(o.status==='delivered')ordSummary.delivered++;});
   const topHtml=top.length?`<ul class="vx-list">${top.map(([code,c])=>`<li><strong>${esc(code)}</strong> — searched ${c} times</li>`).join('')}</ul>`:'<div class="vx-empty">No search analytics yet.</div>';
-  return `<div><div><strong>Scope:</strong> ${esc(mode)}</div><div style="margin-top:8px"><strong>Top Searched Products</strong></div>${topHtml}<div style="margin-top:12px"><strong>Order Status Summary</strong></div><ul class="vx-list"><li>Need to Order: ${ordSummary.need_order}</li><li>Delivered: ${ordSummary.delivered}</li></ul></div>`;
+  return `<div>
+    <div><strong>Scope:</strong> ${esc(mode)}</div>
+    <div class="chart-wrap">
+      <div class="chart-card">
+        <div class="chart-title">Product Type Mix</div>
+        <div class="chart-box"><canvas id="typePie"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Design Family Mix</div>
+        <div class="chart-box"><canvas id="familyPie"></canvas></div>
+      </div>
+    </div>
+    <div style="margin-top:8px"><strong>Top Searched Products</strong></div>
+    ${topHtml}
+    <div style="margin-top:12px"><strong>Order Status Summary</strong></div>
+    <ul class="vx-list"><li>Need to Order: ${ordSummary.need_order}</li><li>Delivered: ${ordSummary.delivered}</li></ul>
+  </div>`;
+}
+function guessProductType(item){
+  const t=`${item?.design||''} ${item?.collection||''} ${item?.style_code||''}`.toLowerCase();
+  if(/ring|rng|band/.test(t)) return 'Rings';
+  if(/bracelet|brc|bangle|cuff/.test(t)) return 'Bracelets';
+  if(/earring|ear|stud|hoop|drop/.test(t)) return 'Earrings';
+  if(/chain|necklace|pendant|choker/.test(t)) return 'Chains/Necklaces';
+  return 'Other';
+}
+function guessDesignFamily(item){
+  const t=`${item?.design||''} ${item?.collection||''}`.toLowerCase();
+  if(/linq|link/.test(t)) return 'Linq/Link';
+  if(/bezel/.test(t)) return 'Bezel';
+  if(/classic/.test(t)) return 'Classic';
+  if(/vintage|heritage/.test(t)) return 'Vintage';
+  return 'Other';
+}
+function buildPieCounts(events){
+  const byType={};
+  const byFamily={};
+  events.forEach((e)=>{
+    const item=ITEMS[e.code]||{design:e.meta?.design||'',collection:e.meta?.collection||'',style_code:e.meta?.style_code||''};
+    const t=guessProductType(item);
+    const f=guessDesignFamily(item);
+    byType[t]=(byType[t]||0)+1;
+    byFamily[f]=(byFamily[f]||0)+1;
+  });
+  return {byType,byFamily};
+}
+async function ensureChartJs(){
+  if(window.Chart) return;
+  await loadScript('https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js');
+}
+let analyticsTypeChart=null;
+let analyticsFamilyChart=null;
+async function renderAnalyticsCharts(events){
+  const typeCanvas=document.getElementById('typePie');
+  const familyCanvas=document.getElementById('familyPie');
+  if(!typeCanvas||!familyCanvas) return;
+  if(!events.length) return;
+  await ensureChartJs();
+  const {byType,byFamily}=buildPieCounts(events);
+  const palette=['#C9A87C','#2A7A63','#7DAA9E','#E2C98A','#8AA9A0','#4D6B62','#A07840'];
+  if(analyticsTypeChart) analyticsTypeChart.destroy();
+  if(analyticsFamilyChart) analyticsFamilyChart.destroy();
+  analyticsTypeChart=new Chart(typeCanvas,{
+    type:'pie',
+    data:{labels:Object.keys(byType),datasets:[{data:Object.values(byType),backgroundColor:palette}]},
+    options:{plugins:{legend:{labels:{color:'#dbe9e4'}}}}
+  });
+  analyticsFamilyChart=new Chart(familyCanvas,{
+    type:'pie',
+    data:{labels:Object.keys(byFamily),datasets:[{data:Object.values(byFamily),backgroundColor:palette}]},
+    options:{plugins:{legend:{labels:{color:'#dbe9e4'}}}}
+  });
 }
 async function showAnalytics(){
   const localEvents=readStore(STORAGE_KEYS.events,[]).filter(e=>e.type==='search');
@@ -520,6 +602,7 @@ async function showAnalytics(){
     useCloud?'All Devices Analytics':'Device Analytics',
     `<div class="ins-head"><div class="ins-note">Top searched products and order status summary.</div><div><button class="ins-btn" onclick="downloadDailyExcel()">Download Excel</button> <button class="ins-btn" onclick="clearResult()">Back</button></div></div>${buildAnalyticsHtml(events,orders,useCloud?'All Devices':'This Device')}`
   );
+  renderAnalyticsCharts(events).catch((e)=>console.error('Analytics chart render failed',e));
 }
 function injectTopTools(){
   ensureEnhancementStyles();
