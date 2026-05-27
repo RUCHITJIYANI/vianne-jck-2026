@@ -9,64 +9,124 @@
 <meta name="theme-color" content="#1B5C4B">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="icon" type="image/png" href="assets/favicon.png">
-<title>Vianne Jewels — Request Access</title>
+<title>Vianne Jewels — JCK 2026</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap');
-*{box-sizing:border-box}
-body{font-family:'DM Sans',sans-serif;background:#0D1F1A;color:#F5EDD9;margin:0;min-height:100vh;padding:20px;display:flex;align-items:center;justify-content:center}
-.panel{background:#134438;border:1px solid #C9A87C;border-radius:14px;padding:32px 28px;max-width:420px;width:100%;box-shadow:0 4px 24px rgba(0,0,0,.45)}
-h2{color:#E2C98A;letter-spacing:.12em;margin:0 0 8px;font-size:1.1rem;text-align:center}
-.lead{color:#6B8C82;font-size:.85rem;line-height:1.55;text-align:center;margin:0 0 22px}
-.code-lines{background:#0D1F1A;border:1px solid #2A7A63;border-radius:10px;padding:16px 14px;margin-bottom:16px}
-.code-line{font-family:ui-monospace,Menlo,monospace;font-size:1.05rem;letter-spacing:.08em;color:#E2C98A;padding:6px 0;text-align:center;border-bottom:1px solid rgba(42,122,99,.35)}
-.code-line:last-child{border-bottom:none}
-.btn{width:100%;padding:12px;border:none;border-radius:8px;font-weight:700;font-size:.9rem;cursor:pointer;margin-bottom:10px;font-family:inherit}
-.btn-primary{background:#C9A87C;color:#0D1F1A}
-.btn-secondary{background:transparent;border:1.5px solid #6B8C82;color:#F5EDD9}
-.btn-primary:hover{background:#E2C98A}
-.status{text-align:center;font-size:.82rem;color:#6B8C82;margin-top:8px;min-height:1.2em}
-.waiting .spinner{width:28px;height:28px;border:3px solid rgba(201,168,124,.25);border-top-color:#C9A87C;border-radius:50%;animation:spin .8s linear infinite;margin:12px auto}
-@keyframes spin{to{transform:rotate(360deg)}}
-.setup{background:#3d2020;border-color:#B03020;padding:16px;border-radius:8px;font-size:.82rem;color:#F5EDD9;line-height:1.5}
-.setup a{color:#E2C98A}
-.denied{color:#F5B7B1;text-align:center;font-size:.88rem}
-.muted{font-size:.75rem;color:#6B8C82;text-align:center;margin-top:14px}
+body {
+  font-family: 'DM Sans', sans-serif;
+  background-color: #0D1F1A;
+  color: #F5EDD9;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  margin: 0;
+  padding: 16px;
+}
+.lock-box {
+  background: #134438;
+  padding: 40px;
+  border-radius: 14px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  border: 1px solid #C9A87C;
+  text-align: center;
+  max-width: 380px;
+  width: 100%;
+}
+h2 {
+  color: #E2C98A;
+  margin: 0 0 10px;
+  letter-spacing: 0.1em;
+  font-size: 1.3rem;
+}
+p {
+  font-size: 0.85rem;
+  color: #6B8C82;
+  margin: 0 0 24px;
+  line-height: 1.6;
+}
+input {
+  width: 100%;
+  padding: 13px;
+  border-radius: 8px;
+  border: 1.5px solid #D6E8E2;
+  background: #F5EDD9;
+  color: #0D1F1A;
+  font-size: 1rem;
+  outline: none;
+  text-align: center;
+  margin-bottom: 14px;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+input:focus {
+  border-color: #C9A87C;
+}
+button {
+  width: 100%;
+  padding: 13px;
+  background: #C9A87C;
+  color: #0D1F1A;
+  border: none;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  font-family: inherit;
+}
+button:hover { background: #E2C98A; }
+button:active { background: #b8924e; }
+.err-msg {
+  color: #F5B7B1;
+  font-size: 0.8rem;
+  margin-top: 12px;
+  display: none;
+}
+.logo {
+  margin-bottom: 18px;
+}
 </style>
 </head>
 <body>
 
-<div id="setupNotice" class="panel setup" style="display:none">
-  <strong>Firebase not configured yet.</strong><br><br>
-  Follow <a href="FIREBASE-SETUP.md">FIREBASE-SETUP.md</a> to enable request/approve access, then redeploy.
-</div>
-
-<div id="accessGate" class="panel" style="display:none">
+<div class="lock-box">
+  <div class="logo">
+    <svg width="40" height="40" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M30 8 C30 8 22 16 22 24 C22 28 25 31 30 31 C35 31 38 28 38 24 C38 16 30 8 30 8Z" stroke="#C9A87C" stroke-width="1.5" fill="none"/>
+      <path d="M20 14 C20 14 13 20 14 28 C15 32 18 34 22 33" stroke="#C9A87C" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+      <path d="M40 14 C40 14 47 20 46 28 C45 32 42 34 38 33" stroke="#C9A87C" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+      <circle cx="30" cy="38" r="1.5" fill="#C9A87C"/>
+      <circle cx="30" cy="43" r="1.5" fill="#C9A87C"/>
+    </svg>
+  </div>
   <h2>VIANNE JEWELS</h2>
-  <p class="lead">Send the code below to get access to the JCK 2026 price lookup. You’ll be let in automatically once approved.</p>
-  <div id="codeLines" class="code-lines"></div>
-  <button type="button" class="btn btn-primary" id="copyBtn">Copy message</button>
-  <p class="muted">Paste into WhatsApp, iMessage, or email and send to Ruchit.</p>
+  <p>JCK 2026 — Private price lookup.<br>Enter your access password to continue.</p>
+  <input type="password" id="passInput" placeholder="Password" autocomplete="current-password"
+    onkeydown="if(event.key==='Enter') checkPass()">
+  <button type="button" onclick="checkPass()">Enter</button>
+  <div id="err" class="err-msg">Incorrect password. Please try again.</div>
 </div>
 
-<div id="waitingPanel" class="panel waiting" style="display:none">
-  <h2>WAITING FOR APPROVAL</h2>
-  <div class="spinner"></div>
-  <div id="codeLinesWait" class="code-lines"></div>
-  <p id="statusText" class="status">Waiting for approval…</p>
-  <p class="muted">Keep this page open. It will open the catalog when approved.</p>
-  <button type="button" class="btn btn-secondary" id="newCodeBtn">Generate new code</button>
-</div>
+<script>
+const SECURE_KEY = "VianneNY";
+const AUTH_KEY   = "vianne_jck_auth";
 
-<div id="deniedPanel" class="panel" style="display:none">
-  <h2>ACCESS DENIED</h2>
-  <p class="denied">This request was not approved. Contact Ruchit if you need access.</p>
-  <button type="button" class="btn btn-secondary" onclick="location.reload()">Try again</button>
-</div>
+if (sessionStorage.getItem(AUTH_KEY) === "1") {
+  window.location.replace("lookup.html");
+}
 
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
-<script src="firebase-config.js"></script>
-<script src="js/auth-common.js"></script>
-<script src="js/access.js"></script>
+function checkPass() {
+  const p = document.getElementById("passInput").value;
+  if (p === SECURE_KEY) {
+    sessionStorage.setItem(AUTH_KEY, "1");
+    window.location.href = "lookup.html";
+  } else {
+    document.getElementById("err").style.display = "block";
+    document.getElementById("passInput").value = "";
+    document.getElementById("passInput").focus();
+  }
+}
+</script>
 </body>
 </html>
