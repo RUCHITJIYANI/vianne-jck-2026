@@ -58,6 +58,9 @@
     db.ref("access_requests/" + id).update({
       status,
       reviewedAt: Date.now(),
+    }).catch((err) => {
+      console.error(err);
+      alert("Update failed. Check Firebase rules.");
     });
   }
 
@@ -96,6 +99,11 @@
           listEl.appendChild(h);
           other.forEach((i) => listEl.appendChild(renderRequest(i.id, i)));
         }
+      })
+      .catch((err) => {
+        console.error(err);
+        listEl.innerHTML =
+          "<p class='muted'>Permission denied. Publish Firebase rules in Realtime Database → Rules.</p>";
       });
   }
 
