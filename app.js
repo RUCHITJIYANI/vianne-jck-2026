@@ -1,9 +1,48 @@
 const ALL=Object.keys(ITEMS);
 let cur=null,ovr=null,acIdx=-1,scanOn=false;
+const STORAGE_KEYS={
+  deviceId:'vianne_device_id',
+  events:'vianne_events_v1',
+  orders:'vianne_orders_v1'
+};
+const MAX_EVENTS=5000;
 
 const METALS={'G14KWG':'14K White Gold','G18KWG':'18K White Gold','G14KYG':'14K Yellow Gold','G18KYG':'18K Yellow Gold','G14KRG':'14K Rose Gold','G18KRG':'18K Rose Gold','SL925':'Sterling Silver','SL925YG VERMEIL':'Silver Vermeil','SL925WSL':'Silver','G10KWG':'10K White Gold','P950':'Platinum 950','SL999':'Fine Silver','G18KYG':'18K Yellow Gold'};
 
 function fmt(n){return n!=null?'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';}
+function readStore(key,fallback){try{return JSON.parse(localStorage.getItem(key)||'null')??fallback;}catch(e){return fallback;}}
+function writeStore(key,val){localStorage.setItem(key,JSON.stringify(val));}
+function getDeviceId(){
+  let id=localStorage.getItem(STORAGE_KEYS.deviceId);
+  if(!id){
+    id='DV-'+Math.random().toString(36).slice(2,8).toUpperCase()+'-'+Date.now().toString(36).slice(-4).toUpperCase();
+    localStorage.setItem(STORAGE_KEYS.deviceId,id);
+  }
+  return id;
+}
+function nowIso(){return new Date().toISOString();}
+function logEvent(type,code,meta){
+  const events=readStore(STORAGE_KEYS.events,[]);
+  events.push({ts:nowIso(),deviceId:getDeviceId(),type,code,meta:meta||{}});
+  if(events.length>MAX_EVENTS) events.splice(0,events.length-MAX_EVENTS);
+  writeStore(STORAGE_KEYS.events,events);
+}
+function getOrders(){return readStore(STORAGE_KEYS.orders,{});}
+function getOrder(code){return getOrders()[code]||null;}
+function setOrderStatus(code,status){
+  const orders=getOrders();
+  if(status==='clear'){
+    delete orders[code];
+  } else {
+    orders[code]={status,updatedAt:nowIso()};
+  }
+  writeStore(STORAGE_KEYS.orders,orders);
+  logEvent('status_change',code,{status});
+  if(cur&&cur.unique_code===code) render();
+  const msg=status==='clear'?'Status cleared':status==='need_order'?'Marked: Need to Order':'Marked: Delivered';
+  showStatus('✓ '+msg+' — '+code,'ok');
+}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));}
 
 function onCode(v){
   const q=v.trim().toUpperCase();
@@ -32,6 +71,7 @@ function showItem(c){
   if(!it){showStatus('Code not found','err');clearResult();return;}
   cur=it;ovr=null;
   document.getElementById('priceInput').value='';
+  logEvent('search',it.unique_code,{design:it.design,collection:it.collection,style_code:it.style_code});
   try{
     render();
     showStatus('✓ Found: '+it.design+' — '+it.collection,'ok');
@@ -60,6 +100,8 @@ function render(){
   const flbl=m?`Today Cost + Tariffs ÷ ${m} (${mpct}% margin)`:'Formula N/A';
   const totalCts=(it.stones||[]).reduce((s,st)=>s+(st.cts||0),0);
   const imgSrc=IMGS[it.unique_code.toUpperCase()]||'';
+  const ord=getOrder(it.unique_code);
+  const ordText=ord?(ord.status==='need_order'?'Need to Order':'Delivered'):'Not set';
 
   document.getElementById('emptyState').style.display='none';
   const card=document.getElementById('rc');
@@ -73,6 +115,14 @@ function render(){
 <div class="ch">
   <div><h2>${it.unique_code}</h2><div class="sc">Style: ${it.style_code}</div></div>
   <span class="badge">${it.design}</span>
+</div>
+<div class="track-row">
+  <div class="track-status">Order Status: <strong>${ordText}</strong></div>
+  <div class="track-actions">
+    <button class="mini-btn" onclick="setOrderStatus('${it.unique_code}','need_order')">Need to Order</button>
+    <button class="mini-btn" onclick="setOrderStatus('${it.unique_code}','delivered')">Delivered</button>
+    <button class="mini-btn ghost" onclick="setOrderStatus('${it.unique_code}','clear')">Clear</button>
+  </div>
 </div>
 <div class="ci">${imgHtml}</div>
 <div class="cb">
@@ -308,3 +358,130 @@ document.addEventListener('visibilitychange', ()=>{
 window.addEventListener('pagehide', ()=>{
   stopScanner();
 });
+
+function ensureEnhancementStyles(){
+  if(document.getElementById('enhancementStyles')) return;
+  const st=document.createElement('style');
+  st.id='enhancementStyles';
+  st.textContent=`
+  .top-tools{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 4px}
+  .top-tools button{border:1px solid #365e57;background:#123831;color:#dfeee8;padding:7px 10px;border-radius:8px;font-size:12px;cursor:pointer}
+  .top-tools button:hover{background:#17463d}
+  .track-row{margin:10px 0 8px;padding:10px;border:1px solid rgba(201,168,76,.28);border-radius:10px;background:rgba(10,27,23,.38)}
+  .track-status{font-size:13px;color:#cfe3db;margin-bottom:8px}
+  .track-actions{display:flex;gap:8px;flex-wrap:wrap}
+  .mini-btn{background:#c9a84c;color:#102620;border:none;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer}
+  .mini-btn.ghost{background:#293e39;color:#d6e6e0;border:1px solid #4b6961}
+  .vx-modal{position:fixed;inset:0;background:rgba(5,13,11,.65);display:flex;align-items:center;justify-content:center;padding:18px;z-index:9999}
+  .vx-box{width:min(760px,100%);max-height:85vh;overflow:auto;background:#0f2f29;border:1px solid #3c625a;border-radius:14px;padding:14px;color:#e9f2ee}
+  .vx-head{display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;background:#0f2f29;padding-bottom:8px}
+  .vx-close{border:1px solid #42675f;background:#153d35;color:#d9ebe4;border-radius:8px;padding:6px 10px;cursor:pointer}
+  .vx-list{margin:10px 0 0;padding:0;list-style:none}
+  .vx-list li{padding:8px 10px;border-bottom:1px solid rgba(119,160,149,.2);font-size:13px}
+  .vx-empty{opacity:.72;font-size:13px;padding:8px 0}
+  `;
+  document.head.appendChild(st);
+}
+function openModal(title,innerHtml){
+  closeModal();
+  const wrap=document.createElement('div');
+  wrap.className='vx-modal';
+  wrap.id='vxModal';
+  wrap.innerHTML=`<div class="vx-box"><div class="vx-head"><h3>${esc(title)}</h3><button class="vx-close" onclick="closeModal()">Close</button></div>${innerHtml}</div>`;
+  wrap.addEventListener('click',(e)=>{if(e.target===wrap) closeModal();});
+  document.body.appendChild(wrap);
+}
+function closeModal(){const m=document.getElementById('vxModal');if(m)m.remove();}
+function sameDay(ts,yyyyMmDd){return ts.slice(0,10)===yyyyMmDd;}
+function todayKey(){return new Date().toISOString().slice(0,10);}
+function buildHistoryHtml(){
+  const events=readStore(STORAGE_KEYS.events,[]).filter(e=>e.type==='search').slice(-200).reverse();
+  if(!events.length)return '<div class="vx-empty">No lookups yet on this device.</div>';
+  return `<ul class="vx-list">${events.map(e=>`<li><strong>${esc(e.code)}</strong> — ${esc(e.meta.design||'')} <br><small>${new Date(e.ts).toLocaleString()}</small></li>`).join('')}</ul>`;
+}
+function showHistory(){openModal('Device Lookup History',buildHistoryHtml());}
+function buildAnalyticsHtml(){
+  const events=readStore(STORAGE_KEYS.events,[]).filter(e=>e.type==='search');
+  const counts={};
+  events.forEach(e=>{counts[e.code]=(counts[e.code]||0)+1;});
+  const top=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,20);
+  const orders=getOrders();
+  const ordSummary={need_order:0,delivered:0};
+  Object.values(orders).forEach(o=>{if(ordSummary[o.status]!=null)ordSummary[o.status]++;});
+  const topHtml=top.length?`<ul class="vx-list">${top.map(([code,c])=>`<li><strong>${esc(code)}</strong> — searched ${c} times</li>`).join('')}</ul>`:'<div class="vx-empty">No search analytics yet.</div>';
+  return `<div><div><strong>Top Searched Products</strong></div>${topHtml}<div style="margin-top:12px"><strong>Order Status Summary</strong></div><ul class="vx-list"><li>Need to Order: ${ordSummary.need_order}</li><li>Delivered: ${ordSummary.delivered}</li></ul></div>`;
+}
+function showAnalytics(){openModal('Device Analytics',buildAnalyticsHtml());}
+function injectTopTools(){
+  ensureEnhancementStyles();
+  if(document.getElementById('topTools')) return;
+  const codeInput=document.getElementById('codeInput');
+  if(!codeInput||!codeInput.parentElement||!codeInput.parentElement.parentElement) return;
+  const host=codeInput.parentElement.parentElement;
+  const bar=document.createElement('div');
+  bar.id='topTools';
+  bar.className='top-tools';
+  bar.innerHTML=`
+    <button onclick="showHistory()">History</button>
+    <button onclick="showAnalytics()">Analytics</button>
+    <button onclick="downloadDailyExcel()">Download Daily Excel</button>
+  `;
+  host.appendChild(bar);
+}
+function loadScript(src){
+  return new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src=src;
+    s.onload=resolve;
+    s.onerror=reject;
+    document.head.appendChild(s);
+  });
+}
+async function ensureXlsx(){
+  if(window.XLSX) return;
+  await loadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');
+}
+function fallbackCsvDownload(rows,fileName){
+  const escCsv=v=>`"${String(v??'').replace(/"/g,'""')}"`;
+  const csv=rows.map(r=>r.map(escCsv).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=fileName.replace('.xlsx','.csv');
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+async function downloadDailyExcel(){
+  const date=todayKey();
+  const events=readStore(STORAGE_KEYS.events,[]).filter(e=>sameDay(e.ts,date));
+  const orders=getOrders();
+  const device=getDeviceId();
+  const lookupRows=events.filter(e=>e.type==='search').map(e=>[
+    e.ts,device,e.code,e.meta.design||'',e.meta.collection||'',e.meta.style_code||''
+  ]);
+  const statusRows=Object.entries(orders).map(([code,o])=>[code,o.status,o.updatedAt,device]);
+  const summaryMap={};
+  lookupRows.forEach(r=>{summaryMap[r[2]]=(summaryMap[r[2]]||0)+1;});
+  const summaryRows=Object.entries(summaryMap).sort((a,b)=>b[1]-a[1]).map(([code,count])=>[code,count]);
+  if(!lookupRows.length&&!statusRows.length){
+    showStatus('No data yet for today on this device.','err');
+    return;
+  }
+  const fileName=`vianne-report-${date}-${device}.xlsx`;
+  try{
+    await ensureXlsx();
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['timestamp','device_id','code','design','collection','style_code'],...lookupRows]),'Lookups');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['code','status','updated_at','device_id'],...statusRows]),'OrderStatus');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['code','search_count'],...summaryRows]),'TopSearches');
+    XLSX.writeFile(wb,fileName);
+    showStatus('✓ Daily Excel downloaded','ok');
+  } catch(e){
+    const rows=[['type','timestamp','device_id','code','design','collection','style_code','status','updated_at']];
+    lookupRows.forEach(r=>rows.push(['lookup',r[0],r[1],r[2],r[3],r[4],r[5],'','']));
+    statusRows.forEach(r=>rows.push(['status','','',r[0],'','','',r[1],r[2]]));
+    fallbackCsvDownload(rows,fileName);
+    showStatus('Excel library blocked; downloaded CSV instead.','err');
+  }
+}
+injectTopTools();
