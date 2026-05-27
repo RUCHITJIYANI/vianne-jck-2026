@@ -6,12 +6,24 @@ const STORAGE_KEYS={
   orders:'vianne_orders_v1'
 };
 const MAX_EVENTS=5000;
+let cloudDb=null;
+let cloudReady=false;
+let cloudStatus='local-only';
 
 const METALS={'G14KWG':'14K White Gold','G18KWG':'18K White Gold','G14KYG':'14K Yellow Gold','G18KYG':'18K Yellow Gold','G14KRG':'14K Rose Gold','G18KRG':'18K Rose Gold','SL925':'Sterling Silver','SL925YG VERMEIL':'Silver Vermeil','SL925WSL':'Silver','G10KWG':'10K White Gold','P950':'Platinum 950','SL999':'Fine Silver','G18KYG':'18K Yellow Gold'};
 
 function fmt(n){return n!=null?'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';}
 function readStore(key,fallback){try{return JSON.parse(localStorage.getItem(key)||'null')??fallback;}catch(e){return fallback;}}
 function writeStore(key,val){localStorage.setItem(key,JSON.stringify(val));}
+function getCloudCfg(){
+  const cfg=(window.VIANNE_CLOUD_CONFIG||{});
+  return {
+    enabled:!!cfg.enabled,
+    appName:cfg.appName||'vianne-jck-cloud',
+    pathPrefix:cfg.pathPrefix||'vianne-jck-2026',
+    firebaseConfig:cfg.firebaseConfig||null
+  };
+}
 function getDeviceId(){
   let id=localStorage.getItem(STORAGE_KEYS.deviceId);
   if(!id){
@@ -21,11 +33,86 @@ function getDeviceId(){
   return id;
 }
 function nowIso(){return new Date().toISOString();}
+function makeEventId(){
+  return `${getDeviceId()}_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+}
+async function initCloudSync(){
+  const cfg=getCloudCfg();
+  if(!cfg.enabled){cloudStatus='local-only';return false;}
+  if(!window.firebase||!cfg.firebaseConfig){
+    cloudStatus='cloud-config-missing';
+    return false;
+  }
+  try{
+    let appInstance;
+    try{
+      appInstance=firebase.app(cfg.appName);
+    }catch(e){
+      appInstance=firebase.initializeApp(cfg.firebaseConfig,cfg.appName);
+    }
+    cloudDb=appInstance.database();
+    cloudReady=true;
+    cloudStatus='cloud-ready';
+    return true;
+  }catch(e){
+    console.error('Cloud init failed:',e);
+    cloudStatus='cloud-error';
+    return false;
+  }
+}
+function cloudPath(part){
+  const cfg=getCloudCfg();
+  return `${cfg.pathPrefix}/${part}`;
+}
+function pushCloudEvent(evt){
+  if(!cloudReady||!cloudDb) return;
+  const eventId=makeEventId();
+  cloudDb.ref(`${cloudPath('events')}/${eventId}`).set(evt).catch((e)=>console.error('Cloud event write failed',e));
+}
+function pushCloudOrder(code,status,updatedAt){
+  if(!cloudReady||!cloudDb) return;
+  const payload={code,status,updatedAt,deviceId:getDeviceId()};
+  cloudDb.ref(`${cloudPath('orders')}/${code}`).set(payload).catch((e)=>console.error('Cloud order write failed',e));
+}
+async function fetchCloudEvents(){
+  if(!cloudReady||!cloudDb) return [];
+  try{
+    const snap=await cloudDb.ref(cloudPath('events')).limitToLast(5000).once('value');
+    const data=snap.val()||{};
+    return Object.values(data).filter(Boolean);
+  }catch(e){
+    console.error('Cloud events fetch failed',e);
+    return [];
+  }
+}
+async function fetchCloudOrders(){
+  if(!cloudReady||!cloudDb) return {};
+  try{
+    const snap=await cloudDb.ref(cloudPath('orders')).once('value');
+    return snap.val()||{};
+  }catch(e){
+    console.error('Cloud orders fetch failed',e);
+    return {};
+  }
+}
+function dedupeEvents(events){
+  const seen=new Set();
+  const out=[];
+  events.forEach((e)=>{
+    const key=[e.ts,e.deviceId,e.type,e.code].join('|');
+    if(seen.has(key)) return;
+    seen.add(key);
+    out.push(e);
+  });
+  return out;
+}
 function logEvent(type,code,meta){
+  const evt={ts:nowIso(),deviceId:getDeviceId(),type,code,meta:meta||{}};
   const events=readStore(STORAGE_KEYS.events,[]);
-  events.push({ts:nowIso(),deviceId:getDeviceId(),type,code,meta:meta||{}});
+  events.push(evt);
   if(events.length>MAX_EVENTS) events.splice(0,events.length-MAX_EVENTS);
   writeStore(STORAGE_KEYS.events,events);
+  pushCloudEvent(evt);
 }
 function getOrders(){return readStore(STORAGE_KEYS.orders,{});}
 function getOrder(code){return getOrders()[code]||null;}
@@ -38,6 +125,7 @@ function setOrderStatus(code,status){
   }
   writeStore(STORAGE_KEYS.orders,orders);
   logEvent('status_change',code,{status});
+  pushCloudOrder(code,status==='clear'?'clear':status,nowIso());
   if(cur&&cur.unique_code===code) render();
   const msg=status==='clear'?'Status cleared':status==='need_order'?'Marked: Need to Order':'Marked: Delivered';
   showStatus('✓ '+msg+' — '+code,'ok');
@@ -394,24 +482,35 @@ function openModal(title,innerHtml){
 function closeModal(){const m=document.getElementById('vxModal');if(m)m.remove();}
 function sameDay(ts,yyyyMmDd){return ts.slice(0,10)===yyyyMmDd;}
 function todayKey(){return new Date().toISOString().slice(0,10);}
-function buildHistoryHtml(){
-  const events=readStore(STORAGE_KEYS.events,[]).filter(e=>e.type==='search').slice(-200).reverse();
-  if(!events.length)return '<div class="vx-empty">No lookups yet on this device.</div>';
+function buildHistoryHtml(events,title){
+  if(!events.length)return '<div class="vx-empty">No lookups found.</div>';
   return `<ul class="vx-list">${events.map(e=>`<li><strong>${esc(e.code)}</strong> — ${esc(e.meta.design||'')} <br><small>${new Date(e.ts).toLocaleString()}</small></li>`).join('')}</ul>`;
 }
-function showHistory(){openModal('Device Lookup History',buildHistoryHtml());}
-function buildAnalyticsHtml(){
-  const events=readStore(STORAGE_KEYS.events,[]).filter(e=>e.type==='search');
+async function showHistory(){
+  const localEvents=readStore(STORAGE_KEYS.events,[]).filter(e=>e.type==='search');
+  const cloudEvents=await fetchCloudEvents();
+  const all=(cloudEvents.length?cloudEvents:localEvents).filter(e=>e.type==='search').slice(-200).reverse();
+  const mode=cloudEvents.length?'All Devices':'This Device';
+  openModal(`${mode} Lookup History`,buildHistoryHtml(all));
+}
+function buildAnalyticsHtml(events,orders,mode){
   const counts={};
   events.forEach(e=>{counts[e.code]=(counts[e.code]||0)+1;});
   const top=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,20);
-  const orders=getOrders();
   const ordSummary={need_order:0,delivered:0};
-  Object.values(orders).forEach(o=>{if(ordSummary[o.status]!=null)ordSummary[o.status]++;});
+  Object.values(orders).forEach(o=>{if(o.status==='need_order')ordSummary.need_order++; if(o.status==='delivered')ordSummary.delivered++;});
   const topHtml=top.length?`<ul class="vx-list">${top.map(([code,c])=>`<li><strong>${esc(code)}</strong> — searched ${c} times</li>`).join('')}</ul>`:'<div class="vx-empty">No search analytics yet.</div>';
-  return `<div><div><strong>Top Searched Products</strong></div>${topHtml}<div style="margin-top:12px"><strong>Order Status Summary</strong></div><ul class="vx-list"><li>Need to Order: ${ordSummary.need_order}</li><li>Delivered: ${ordSummary.delivered}</li></ul></div>`;
+  return `<div><div><strong>Scope:</strong> ${esc(mode)}</div><div style="margin-top:8px"><strong>Top Searched Products</strong></div>${topHtml}<div style="margin-top:12px"><strong>Order Status Summary</strong></div><ul class="vx-list"><li>Need to Order: ${ordSummary.need_order}</li><li>Delivered: ${ordSummary.delivered}</li></ul></div>`;
 }
-function showAnalytics(){openModal('Device Analytics',buildAnalyticsHtml());}
+async function showAnalytics(){
+  const localEvents=readStore(STORAGE_KEYS.events,[]).filter(e=>e.type==='search');
+  const cloudEvents=await fetchCloudEvents();
+  const cloudOrders=await fetchCloudOrders();
+  const useCloud=cloudEvents.length>0||Object.keys(cloudOrders).length>0;
+  const events=(useCloud?dedupeEvents(cloudEvents):localEvents).filter(e=>e.type==='search');
+  const orders=useCloud?cloudOrders:getOrders();
+  openModal(useCloud?'All Devices Analytics':'Device Analytics',buildAnalyticsHtml(events,orders,useCloud?'All Devices':'This Device'));
+}
 function injectTopTools(){
   ensureEnhancementStyles();
   if(document.getElementById('topTools')) return;
@@ -453,13 +552,16 @@ function fallbackCsvDownload(rows,fileName){
 }
 async function downloadDailyExcel(){
   const date=todayKey();
-  const events=readStore(STORAGE_KEYS.events,[]).filter(e=>sameDay(e.ts,date));
-  const orders=getOrders();
-  const device=getDeviceId();
+  const localEvents=readStore(STORAGE_KEYS.events,[]);
+  const cloudEvents=await fetchCloudEvents();
+  const cloudOrders=await fetchCloudOrders();
+  const useCloud=cloudEvents.length>0||Object.keys(cloudOrders).length>0;
+  const events=(useCloud?dedupeEvents(cloudEvents):localEvents).filter(e=>sameDay(e.ts,date));
+  const orders=useCloud?cloudOrders:getOrders();
   const lookupRows=events.filter(e=>e.type==='search').map(e=>[
-    e.ts,device,e.code,e.meta.design||'',e.meta.collection||'',e.meta.style_code||''
+    e.ts,e.deviceId||getDeviceId(),e.code,e.meta?.design||'',e.meta?.collection||'',e.meta?.style_code||''
   ]);
-  const statusRows=Object.entries(orders).map(([code,o])=>[code,o.status,o.updatedAt,device]);
+  const statusRows=Object.entries(orders).map(([code,o])=>[code,o.status,o.updatedAt,o.deviceId||getDeviceId()]);
   const summaryMap={};
   lookupRows.forEach(r=>{summaryMap[r[2]]=(summaryMap[r[2]]||0)+1;});
   const summaryRows=Object.entries(summaryMap).sort((a,b)=>b[1]-a[1]).map(([code,count])=>[code,count]);
@@ -467,15 +569,16 @@ async function downloadDailyExcel(){
     showStatus('No data yet for today on this device.','err');
     return;
   }
-  const fileName=`vianne-report-${date}-${device}.xlsx`;
+  const fileName=`vianne-report-${date}-${useCloud?'all-devices':'single-device'}.xlsx`;
   try{
     await ensureXlsx();
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['timestamp','device_id','code','design','collection','style_code'],...lookupRows]),'Lookups');
     XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['code','status','updated_at','device_id'],...statusRows]),'OrderStatus');
     XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['code','search_count'],...summaryRows]),'TopSearches');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['cloud_mode',useCloud?'enabled':'disabled'],['cloud_status',cloudStatus],['generated_at',nowIso()]]),'Meta');
     XLSX.writeFile(wb,fileName);
-    showStatus('✓ Daily Excel downloaded','ok');
+    showStatus(`✓ Daily Excel downloaded (${useCloud?'all devices':'this device'})`,'ok');
   } catch(e){
     const rows=[['type','timestamp','device_id','code','design','collection','style_code','status','updated_at']];
     lookupRows.forEach(r=>rows.push(['lookup',r[0],r[1],r[2],r[3],r[4],r[5],'','']));
@@ -485,3 +588,8 @@ async function downloadDailyExcel(){
   }
 }
 injectTopTools();
+initCloudSync().then((ok)=>{
+  if(ok){
+    showStatus('Cloud sync active: all devices analytics enabled','ok');
+  }
+});
