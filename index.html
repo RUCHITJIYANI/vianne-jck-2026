@@ -115,14 +115,14 @@ button:active { background: #b8924e; }
 const SECURE_KEY = "VianneNY";
 const AUTH_KEY   = "vianne_jck_auth";
 
-if (sessionStorage.getItem(AUTH_KEY) === "1") {
+if (localStorage.getItem(AUTH_KEY) === "1") {
   window.location.replace("lookup.html");
 }
 
 function checkPass() {
   const p = document.getElementById("passInput").value;
   if (p === SECURE_KEY) {
-    sessionStorage.setItem(AUTH_KEY, "1");
+    localStorage.setItem(AUTH_KEY, "1");
     window.location.href = "lookup.html";
   } else {
     document.getElementById("err").style.display = "block";
