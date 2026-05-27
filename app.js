@@ -566,9 +566,20 @@ async function showHistory(){
   );
 }
 function buildAnalyticsHtml(events,orders,mode){
+  const searchEvents=events.filter(e=>e.type==='search');
+  const statusEvents=events.filter(e=>e.type==='status_change');
   const counts={};
-  events.forEach(e=>{counts[e.code]=(counts[e.code]||0)+1;});
-  const top=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,20);
+  searchEvents.forEach(e=>{counts[e.code]=(counts[e.code]||0)+1;});
+  const top=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  const orderedCounts={};
+  const soldCounts={};
+  statusEvents.forEach((e)=>{
+    const st=e.meta?.status;
+    if(st==='need_order') orderedCounts[e.code]=(orderedCounts[e.code]||0)+1;
+    if(st==='delivered') soldCounts[e.code]=(soldCounts[e.code]||0)+1;
+  });
+  const topOrdered=Object.entries(orderedCounts).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const topSold=Object.entries(soldCounts).sort((a,b)=>b[1]-a[1]).slice(0,8);
   const ordSummary={need_order:0,delivered:0};
   Object.values(orders).forEach(o=>{if(o.status==='need_order')ordSummary.need_order++; if(o.status==='delivered')ordSummary.delivered++;});
   const topHtml=top.length?`<ul class="vx-list">${top.map(([code,c])=>`<li><strong>${esc(code)}</strong> — searched ${c} times</li>`).join('')}</ul>`:'<div class="vx-empty">No search analytics yet.</div>';
@@ -584,8 +595,22 @@ function buildAnalyticsHtml(events,orders,mode){
         <div class="chart-box"><canvas id="familyPie"></canvas></div>
       </div>
     </div>
+    <div class="chart-wrap">
+      <div class="chart-card">
+        <div class="chart-title">Most Searched vs Ordered vs Sold</div>
+        <div class="chart-box"><canvas id="productBars"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Status Actions Mix</div>
+        <div class="chart-box"><canvas id="statusPie"></canvas></div>
+      </div>
+    </div>
     <div style="margin-top:8px"><strong>Top Searched Products</strong></div>
     ${topHtml}
+    <div style="margin-top:12px"><strong>Most Ordered</strong></div>
+    ${topOrdered.length?`<ul class="vx-list">${topOrdered.map(([code,c])=>`<li><strong>${esc(code)}</strong> — ordered ${c} times</li>`).join('')}</ul>`:'<div class="vx-empty">No order actions in selected range.</div>'}
+    <div style="margin-top:12px"><strong>Most Sold (Delivered)</strong></div>
+    ${topSold.length?`<ul class="vx-list">${topSold.map(([code,c])=>`<li><strong>${esc(code)}</strong> — delivered ${c} times</li>`).join('')}</ul>`:'<div class="vx-empty">No delivered actions in selected range.</div>'}
     <div style="margin-top:12px"><strong>Order Status Summary</strong></div>
     <ul class="vx-list"><li>Need to Order: ${ordSummary.need_order}</li><li>Delivered: ${ordSummary.delivered}</li></ul>
   </div>`;
@@ -624,16 +649,41 @@ async function ensureChartJs(){
 }
 let analyticsTypeChart=null;
 let analyticsFamilyChart=null;
+let analyticsProductBarChart=null;
+let analyticsStatusPieChart=null;
 async function renderAnalyticsCharts(events){
   const typeCanvas=document.getElementById('typePie');
   const familyCanvas=document.getElementById('familyPie');
-  if(!typeCanvas||!familyCanvas) return;
-  if(!events.length) return;
+  const barCanvas=document.getElementById('productBars');
+  const statusCanvas=document.getElementById('statusPie');
+  if(!typeCanvas||!familyCanvas||!barCanvas||!statusCanvas) return;
+  if(!events.length){
+    [analyticsTypeChart,analyticsFamilyChart,analyticsProductBarChart,analyticsStatusPieChart].forEach(c=>{if(c)c.destroy();});
+    return;
+  }
   await ensureChartJs();
-  const {byType,byFamily}=buildPieCounts(events);
+  const searchEvents=events.filter(e=>e.type==='search');
+  const statusEvents=events.filter(e=>e.type==='status_change');
+  const {byType,byFamily}=buildPieCounts(searchEvents);
+  const searchCounts={};
+  const orderedCounts={};
+  const soldCounts={};
+  searchEvents.forEach(e=>{searchCounts[e.code]=(searchCounts[e.code]||0)+1;});
+  statusEvents.forEach(e=>{
+    if(e.meta?.status==='need_order') orderedCounts[e.code]=(orderedCounts[e.code]||0)+1;
+    if(e.meta?.status==='delivered') soldCounts[e.code]=(soldCounts[e.code]||0)+1;
+  });
+  const labelSet=new Set([
+    ...Object.keys(searchCounts).sort((a,b)=>(searchCounts[b]||0)-(searchCounts[a]||0)).slice(0,6),
+    ...Object.keys(orderedCounts).sort((a,b)=>(orderedCounts[b]||0)-(orderedCounts[a]||0)).slice(0,6),
+    ...Object.keys(soldCounts).sort((a,b)=>(soldCounts[b]||0)-(soldCounts[a]||0)).slice(0,6)
+  ]);
+  const labels=[...labelSet].slice(0,8);
   const palette=['#C9A87C','#2A7A63','#7DAA9E','#E2C98A','#8AA9A0','#4D6B62','#A07840'];
   if(analyticsTypeChart) analyticsTypeChart.destroy();
   if(analyticsFamilyChart) analyticsFamilyChart.destroy();
+  if(analyticsProductBarChart) analyticsProductBarChart.destroy();
+  if(analyticsStatusPieChart) analyticsStatusPieChart.destroy();
   analyticsTypeChart=new Chart(typeCanvas,{
     type:'pie',
     data:{labels:Object.keys(byType),datasets:[{data:Object.values(byType),backgroundColor:palette}]},
@@ -642,6 +692,37 @@ async function renderAnalyticsCharts(events){
   analyticsFamilyChart=new Chart(familyCanvas,{
     type:'pie',
     data:{labels:Object.keys(byFamily),datasets:[{data:Object.values(byFamily),backgroundColor:palette}]},
+    options:{plugins:{legend:{labels:{color:'#dbe9e4'}}}}
+  });
+  analyticsProductBarChart=new Chart(barCanvas,{
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        {label:'Searched',data:labels.map(l=>searchCounts[l]||0),backgroundColor:'#C9A87C'},
+        {label:'Ordered',data:labels.map(l=>orderedCounts[l]||0),backgroundColor:'#2A7A63'},
+        {label:'Sold',data:labels.map(l=>soldCounts[l]||0),backgroundColor:'#7DAA9E'}
+      ]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      scales:{
+        x:{ticks:{color:'#dbe9e4'}},
+        y:{ticks:{color:'#dbe9e4'},beginAtZero:true}
+      },
+      plugins:{legend:{labels:{color:'#dbe9e4'}}}
+    }
+  });
+  analyticsStatusPieChart=new Chart(statusCanvas,{
+    type:'pie',
+    data:{
+      labels:['Need to Order Actions','Delivered Actions'],
+      datasets:[{data:[
+        statusEvents.filter(e=>e.meta?.status==='need_order').length,
+        statusEvents.filter(e=>e.meta?.status==='delivered').length
+      ],backgroundColor:['#2A7A63','#7DAA9E']}]
+    },
     options:{plugins:{legend:{labels:{color:'#dbe9e4'}}}}
   });
 }
@@ -706,14 +787,40 @@ async function downloadDailyExcel(){
   const events=(useCloud?dedupeEvents(cloudEvents):localEvents).filter(e=>inSelectedRange(e.ts));
   const orders=useCloud?cloudOrders:getOrders();
   const lookupRows=events.filter(e=>e.type==='search').map(e=>[
-    e.ts,e.deviceId||getDeviceId(),e.code,e.meta?.design||'',e.meta?.collection||'',e.meta?.style_code||''
+    e.ts,String(e.ts).slice(0,10),e.code,e.meta?.design||'',e.meta?.collection||'',e.meta?.style_code||'',e.deviceId||getDeviceId()
   ]);
-  const statusRows=Object.entries(orders).map(([code,o])=>[code,o.status,o.updatedAt,o.deviceId||getDeviceId()]);
+  const statusRows=Object.entries(orders).map(([code,o])=>[String(o.updatedAt||'').slice(0,10),code,o.status,o.updatedAt,o.deviceId||getDeviceId()]);
+  const statusHistoryRows=events
+    .filter(e=>e.type==='status_change')
+    .map(e=>[
+      e.ts,
+      String(e.ts).slice(0,10),
+      e.code,
+      e.meta?.status||'',
+      e.deviceId||getDeviceId()
+    ]);
+  const orderedCounts={};
+  const soldCounts={};
+  const byDesign={};
+  const byType={};
+  events.forEach((e)=>{
+    if(e.type==='status_change'){
+      if(e.meta?.status==='need_order') orderedCounts[e.code]=(orderedCounts[e.code]||0)+1;
+      if(e.meta?.status==='delivered') soldCounts[e.code]=(soldCounts[e.code]||0)+1;
+    }
+    if(e.type==='search'){
+      const item=ITEMS[e.code]||{design:e.meta?.design||'',collection:e.meta?.collection||'',style_code:e.meta?.style_code||''};
+      const designKey=(item.design||'Other').trim()||'Other';
+      byDesign[designKey]=(byDesign[designKey]||0)+1;
+      const typeKey=guessProductType(item);
+      byType[typeKey]=(byType[typeKey]||0)+1;
+    }
+  });
   const summaryMap={};
   lookupRows.forEach(r=>{summaryMap[r[2]]=(summaryMap[r[2]]||0)+1;});
   const summaryRows=Object.entries(summaryMap).sort((a,b)=>b[1]-a[1]).map(([code,count])=>[code,count]);
   if(!lookupRows.length&&!statusRows.length){
-    showStatus('No data yet for today on this device.','err');
+    showStatus('No data found for selected range.','err');
     return;
   }
   const rangeSlug=FILTER_STATE.mode==='custom'
@@ -723,16 +830,21 @@ async function downloadDailyExcel(){
   try{
     await ensureXlsx();
     const wb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['timestamp','device_id','code','design','collection','style_code'],...lookupRows]),'Lookups');
-    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['code','status','updated_at','device_id'],...statusRows]),'OrderStatus');
-    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['code','search_count'],...summaryRows]),'TopSearches');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['timestamp','date','product_code','design','collection','style_code','searched_by_device'],...lookupRows]),'Searches');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['date','product_code','current_status','status_updated_at','status_set_by_device'],...statusRows]),'OrderStatusCurrent');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['timestamp','date','product_code','status','status_set_by_device'],...statusHistoryRows]),'OrderStatusHistory');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['product_code','search_count'],...summaryRows]),'MostSearched');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['product_code','ordered_count'],...Object.entries(orderedCounts).sort((a,b)=>b[1]-a[1])]),'MostOrdered');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['product_code','sold_count'],...Object.entries(soldCounts).sort((a,b)=>b[1]-a[1])]),'MostSold');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['design','search_count'],...Object.entries(byDesign).sort((a,b)=>b[1]-a[1])]),'DesignAnalytics');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['product_type','search_count'],...Object.entries(byType).sort((a,b)=>b[1]-a[1])]),'TypeAnalytics');
     XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['cloud_mode',useCloud?'enabled':'disabled'],['cloud_status',cloudStatus],['generated_at',nowIso()],['range',currentRangeText()]]),'Meta');
     XLSX.writeFile(wb,fileName);
     showStatus(`✓ Daily Excel downloaded (${useCloud?'all devices':'this device'})`,'ok');
   } catch(e){
-    const rows=[['type','timestamp','device_id','code','design','collection','style_code','status','updated_at']];
-    lookupRows.forEach(r=>rows.push(['lookup',r[0],r[1],r[2],r[3],r[4],r[5],'','']));
-    statusRows.forEach(r=>rows.push(['status','','',r[0],'','','',r[1],r[2]]));
+    const rows=[['row_type','timestamp','date','product_code','design','collection','style_code','status','actor_device']];
+    lookupRows.forEach(r=>rows.push(['search',r[0],r[1],r[2],r[3],r[4],r[5],'',r[6]]));
+    statusHistoryRows.forEach(r=>rows.push(['status_change',r[0],r[1],r[2],'','','',r[3],r[4]]));
     fallbackCsvDownload(rows,fileName);
     showStatus('Excel library blocked; downloaded CSV instead.','err');
   }
