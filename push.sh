@@ -16,7 +16,7 @@ git config http.version HTTP/1.1
 
 git remote set-url origin https://github.com/RUCHITJIYANI/vianne-jck-2026.git
 
-git add index.html lookup.html data.js images.js app.js assets/ .nojekyll README.md .gitignore scripts/
+git add index.html lookup.html admin.html data.js images.js app.js assets/ js/ firebase-config.js .nojekyll README.md FIREBASE-SETUP.md .gitignore scripts/
 git status
 git commit -m "Final build: JCK 2026 jewelry lookup for GitHub Pages" || true
 

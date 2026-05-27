@@ -390,10 +390,26 @@ body {
   </div>
   <div id="rc" class="rc"></div>
 </div>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="js/auth-common.js"></script>
 <script>
-if (sessionStorage.getItem("vianne_jck_auth") !== "1") {
-  window.location.replace("index.html");
-}
+(function () {
+  const requestId = getApprovedRequestId();
+  if (!requestId) {
+    window.location.replace("index.html");
+    return;
+  }
+  if (!isFirebaseConfigured()) return;
+  const db = initFirebase();
+  db.ref("access_requests/" + requestId).once("value", function (snap) {
+    if (!snap.val() || snap.val().status !== "approved") {
+      clearApprovedRequestId();
+      window.location.replace("index.html");
+    }
+  });
+})();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <script src="data.js"></script>

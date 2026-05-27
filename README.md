@@ -8,7 +8,8 @@ After GitHub Pages is enabled:
 
 **https://ruchitjiyani.github.io/vianne-jck-2026/**
 
-- Login password: `vianne2026` (change in `index.html` → `SECURE_KEY`)
+- Visitors request access with a **6-line code** (you approve on `admin.html`)
+- See **FIREBASE-SETUP.md** for one-time Firebase setup
 
 ## Deploy (one command)
 
@@ -38,7 +39,9 @@ Open http://localhost:8080/index.html
 
 | File | Purpose |
 |------|---------|
-| `index.html` | Password gate |
+| `index.html` | Access request (6-line code) |
+| `admin.html` | You approve/deny requests |
+| `firebase-config.js` | Firebase + admin password |
 | `lookup.html` | Main app UI |
 | `data.js` | 452 items from price list |
 | `images.js` | Product photos |
