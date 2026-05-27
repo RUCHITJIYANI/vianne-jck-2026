@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vianne Jewels — Authentication</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap');
+body {
+  font-family: 'DM Sans', sans-serif;
+  background-color: #0D1F1A;
+  color: #F5EDD9;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  margin: 0;
+  padding: 16px;
+}
+.lock-box {
+  background: #134438;
+  padding: 40px;
+  border-radius: 14px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  border: 1px solid #C9A87C;
+  text-align: center;
+  max-width: 380px;
+  width: 100%;
+}
+h2 {
+  color: #E2C98A;
+  margin-bottom: 10px;
+  letter-spacing: 0.1em;
+}
+p {
+  font-size: 0.85rem;
+  color: #6B8C82;
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+input {
+  width: 100%;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1.5px solid #D6E8E2;
+  background: #F5EDD9;
+  color: #0D1F1A;
+  font-size: 1rem;
+  outline: none;
+  text-align: center;
+  margin-bottom: 15px;
+  box-sizing: border-box;
+}
+button {
+  width: 100%;
+  padding: 12px;
+  background: #C9A87C;
+  color: #0D1F1A;
+  border: none;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+}
+button:hover { background: #E2C98A; }
+.err-msg {
+  color: #B03020;
+  font-size: 0.8rem;
+  margin-top: 10px;
+  display: none;
+}
+</style>
+</head>
+<body>
+
+<div class="lock-box">
+  <h2>VIANNE JEWELS</h2>
+  <p>Private access portal. Enter passcode to open the JCK 2026 interactive pricing lookup.</p>
+  <input type="password" id="passInput" placeholder="Enter access password" autocomplete="current-password"
+    onkeydown="if(event.key==='Enter') checkPass()">
+  <button type="button" onclick="checkPass()">Unlock portal</button>
+  <div id="err" class="err-msg">Incorrect password. Access denied.</div>
+</div>
+
+<script>
+// Change this to the password you share with your team
+const SECURE_KEY = "vianne2026";
+const AUTH_KEY = "vianne_jck_auth";
+
+if (sessionStorage.getItem(AUTH_KEY) === "1") {
+  window.location.replace("lookup.html");
+}
+
+function checkPass() {
+  const p = document.getElementById("passInput").value;
+  if (p === SECURE_KEY) {
+    sessionStorage.setItem(AUTH_KEY, "1");
+    window.location.href = "lookup.html";
+  } else {
+    document.getElementById("err").style.display = "block";
+  }
+}
+</script>
+</body>
+</html>
