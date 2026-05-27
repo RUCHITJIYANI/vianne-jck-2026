@@ -89,3 +89,4 @@ not at the root domain. For the root URL, the repo name must be `ruchitjiyani12.
 ### Large files
 
 The Excel file is excluded from git (data is already in `data.js`). Keep the `.xlsx` locally for updates via `scripts/build-data.py`.
+# vianne-jck-2026
