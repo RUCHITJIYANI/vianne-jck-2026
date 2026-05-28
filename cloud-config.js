@@ -4,6 +4,13 @@ window.VIANNE_CLOUD_CONFIG = {
   appName: "vianne-jck-cloud",
   pathPrefix: "vianne-jck-2026-prod",
 
+  // Optional: daily / on-demand backup to Google Sheets (see GOOGLE-SHEETS-DAILY-BACKUP.md)
+  googleSheetBackup: {
+    enabled: false,
+    webAppUrl: "",
+    secret: ""
+  },
+
   firebaseConfig: {
     apiKey: "AIzaSyCmdgFnglJvzZ43iPAS65LevUOjKY714Wc",
     authDomain: "vianne-jck-2026.firebaseapp.com",

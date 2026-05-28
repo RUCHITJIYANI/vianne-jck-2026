@@ -83,7 +83,18 @@ window.VIANNE_CLOUD_CONFIG = {
 
 ---
 
-## Step 5 — Database rules (required)
+## Step 5 — Authorized domain (required for phones)
+
+1. Firebase Console → **Authentication** → **Settings** → **Authorized domains**
+2. Click **Add domain**
+3. Add: `ruchitjiyani.github.io`
+4. Save
+
+Without this, cloud sync may work on your Mac but fail on other devices.
+
+---
+
+## Step 6 — Database rules (required)
 
 In Firebase Console → **Realtime Database → Rules**, paste:
 
@@ -104,7 +115,7 @@ Click **Publish**.
 
 ---
 
-## Step 6 — Deploy site
+## Step 7 — Deploy site
 
 ```bash
 cd /Users/rj/Downloads/vianne-jck-2026
@@ -121,7 +132,7 @@ Hard refresh: **Cmd + Shift + R**
 
 ---
 
-## Step 7 — Verify it works
+## Step 8 — Verify it works
 
 1. Login on Device A → search a product
 2. Login on Device B → open **History** → you should see Device A’s search
@@ -135,6 +146,10 @@ In Firebase Console → Realtime Database → **Data**, you will see:
 vianne-jck-2026-prod
   ├── history
   │     └── (each lookup entry)
+  ├── users
+  │     └── (all login accounts — synced to every device)
+  ├── meta
+  │     └── updatedAt, historyCount, userCount
   └── permissions
         ├── admin
         ├── manager
@@ -145,7 +160,10 @@ vianne-jck-2026-prod
 
 ## Export to Excel (all devices)
 
-Use **History → Export CSV** or Analytics export in the app.  
+- **History → Export CSV** — searches only  
+- **Admin → Full backup CSV** — searches + users  
+- **Daily Google Sheet** — automatic end-of-day archive: see **GOOGLE-SHEETS-DAILY-BACKUP.md**
+
 Cloud history is merged automatically when cloud is enabled.
 
 ---
@@ -155,7 +173,8 @@ Cloud history is merged automatically when cloud is enabled.
 | Problem | Fix |
 |--------|-----|
 | No cloud message | `enabled: false` or wrong `databaseURL` in `cloud-config.js` |
-| Permission denied | Check database rules (step 5) |
+| Works on Mac, not on phone | Add `ruchitjiyani.github.io` to Firebase authorized domains (step 5); friend clears cache |
+| Permission denied | Check database rules (step 6) |
 | Manager still sees old perms | Hard refresh both devices after admin changes |
 | Data not showing | Confirm both devices use same Firebase project URL |
 
