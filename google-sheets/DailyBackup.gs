@@ -1,13 +1,16 @@
 /**
- * Vianne JCK 2026 — Daily backup to Google Sheets
+ * Vianne JCK 2026 — Daily backup to Google Sheets + Drive folder
  *
- * Setup: see GOOGLE-SHEETS-DAILY-BACKUP.md in the repo root.
+ * Setup: see GOOGLE-SHEETS-DAILY-BACKUP.md
  *
- * Script properties (Project settings → Script properties):
+ * Script properties:
  *   FIREBASE_DB_URL  = https://vianne-jck-2026-default-rtdb.firebaseio.com
  *   PATH_PREFIX      = vianne-jck-2026-prod
  *   BACKUP_SECRET    = (optional) same as cloud-config.js googleSheetBackup.secret
+ *   DRIVE_FOLDER_NAME = Vianne JCK 2026  (optional, this is the default)
  */
+
+var DEFAULT_DRIVE_FOLDER = 'Vianne JCK 2026';
 
 function dailyBackupFromFirebase() {
   var props = PropertiesService.getScriptProperties();
@@ -26,6 +29,11 @@ function dailyBackupFromFirebase() {
   writeSummarySheet_(ss, history, users, meta);
   writeLogSheet_(ss, 'firebase-daily', Object.keys(history).length);
 
+  var folder = getOrCreateDriveFolder_();
+  ensureSpreadsheetInFolder_(ss, folder);
+  saveCsvToDrive_(folder, history, users);
+  ensureReadmeInFolder_(folder);
+
   SpreadsheetApp.flush();
 }
 
@@ -36,10 +44,10 @@ function doPost(e) {
   try {
     body = JSON.parse(e.postData.contents);
   } catch (err) {
-    return jsonOut_({ ok: false, error: 'invalid json' }, 400);
+    return jsonOut_({ ok: false, error: 'invalid json' });
   }
   if (secret && body.secret !== secret) {
-    return jsonOut_({ ok: false, error: 'unauthorized' }, 403);
+    return jsonOut_({ ok: false, error: 'unauthorized' });
   }
 
   var historyArr = body.history || [];
@@ -55,7 +63,109 @@ function doPost(e) {
   writeSummarySheet_(ss, history, users, { updatedAt: body.exportedAt || new Date().toISOString() });
   writeLogSheet_(ss, 'app-push', historyArr.length);
 
-  return jsonOut_({ ok: true, rows: historyArr.length });
+  var folder = getOrCreateDriveFolder_();
+  ensureSpreadsheetInFolder_(ss, folder);
+  saveCsvToDrive_(folder, history, users);
+
+  return jsonOut_({ ok: true, rows: historyArr.length, folderUrl: folder.getUrl() });
+}
+
+function getOrCreateDriveFolder_() {
+  var props = PropertiesService.getScriptProperties();
+  var folderName = props.getProperty('DRIVE_FOLDER_NAME') || DEFAULT_DRIVE_FOLDER;
+  var folderId = props.getProperty('DRIVE_FOLDER_ID');
+  if (folderId) {
+    try { return DriveApp.getFolderById(folderId); } catch (e) {}
+  }
+  var folders = DriveApp.getFoldersByName(folderName);
+  if (folders.hasNext()) {
+    var existing = folders.next();
+    props.setProperty('DRIVE_FOLDER_ID', existing.getId());
+    return existing;
+  }
+  var folder = DriveApp.createFolder(folderName);
+  props.setProperty('DRIVE_FOLDER_ID', folder.getId());
+  return folder;
+}
+
+function ensureSpreadsheetInFolder_(ss, folder) {
+  var file = DriveApp.getFileById(ss.getId());
+  var parents = file.getParents();
+  var inFolder = false;
+  while (parents.hasNext()) {
+    if (parents.next().getId() === folder.getId()) inFolder = true;
+  }
+  if (!inFolder) folder.addFile(file);
+  try {
+    var root = DriveApp.getRootFolder();
+    if (root.getId() !== folder.getId()) root.removeFile(file);
+  } catch (e) {}
+}
+
+function saveCsvToDrive_(folder, historyObj, users) {
+  var tz = Session.getScriptTimeZone();
+  var dateStr = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  var csv = buildFullCsv_(historyObj, users);
+  var name = 'VianneJCK_Backup_' + dateStr + '.csv';
+  trashFilesByName_(folder, name);
+  folder.createFile(name, csv, MimeType.CSV);
+}
+
+function buildFullCsv_(historyObj, users) {
+  var lines = [];
+  lines.push('=== SEARCHES ===');
+  lines.push('Date,Time,Code,Style,Design,Collection,Metal,Customer,Price,Method,User,User Name,Role');
+  var list = Object.keys(historyObj || {}).map(function (k) { return historyObj[k]; });
+  list.sort(function (a, b) { return (b.ts || '').localeCompare(a.ts || ''); });
+  list.forEach(function (e) {
+    if (!e) return;
+    var d = e.ts ? new Date(e.ts) : new Date();
+    lines.push([
+      csvCell_(Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd')),
+      csvCell_(Utilities.formatDate(d, Session.getScriptTimeZone(), 'HH:mm:ss')),
+      csvCell_(e.code), csvCell_(e.style), csvCell_(e.design), csvCell_(e.col),
+      csvCell_(e.kt), csvCell_(e.cust), csvCell_(e.price), csvCell_(e.method),
+      csvCell_(e.user), csvCell_(e.userName), csvCell_(e.userRole)
+    ].join(','));
+  });
+  lines.push('');
+  lines.push('=== USERS (no passwords) ===');
+  lines.push('Name,Username,Role,Active');
+  (Array.isArray(users) ? users : []).forEach(function (u) {
+    lines.push([csvCell_(u.n), csvCell_(u.u), csvCell_(u.r), csvCell_(u.active ? 'Yes' : 'No')].join(','));
+  });
+  lines.push('');
+  lines.push('Exported,' + new Date().toISOString());
+  return lines.join('\n');
+}
+
+function csvCell_(v) {
+  return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+}
+
+function trashFilesByName_(folder, name) {
+  var files = folder.getFilesByName(name);
+  while (files.hasNext()) files.next().setTrashed(true);
+}
+
+function ensureReadmeInFolder_(folder) {
+  var name = 'README — Vianne JCK 2026.txt';
+  if (folder.getFilesByName(name).hasNext()) return;
+  var text = [
+    'Vianne JCK 2026 — Data folder',
+    '',
+    'This folder is updated automatically every night from the jewelry lookup app.',
+    '',
+    'Files:',
+    '  • Vianne JCK 2026 — Daily Backup (Google Sheet) — live tabs + summary',
+    '  • VianneJCK_Backup_YYYY-MM-DD.csv — daily Excel-ready export',
+    '',
+    'Live data (real-time): Firebase Console',
+    '  https://console.firebase.google.com/project/vianne-jck-2026/database',
+    '',
+    'App: https://ruchitjiyani.github.io/vianne-jck-2026/'
+  ].join('\n');
+  folder.createFile(name, text, MimeType.PLAIN_TEXT);
 }
 
 function fetchJson_(url) {
@@ -122,7 +232,7 @@ function writeSummarySheet_(ss, historyObj, users, meta) {
     if (e.method === 'scan') scans++;
   });
   var uarr = Array.isArray(users) ? users : [];
-  sh.getRange(1, 1, 6, 2).setValues([
+  sh.getRange(1, 1, 7, 2).setValues([
     ['Backup time', new Date()],
     ['Cloud meta', (meta && meta.updatedAt) || ''],
     ['Total searches', list.length],
@@ -143,12 +253,11 @@ function writeLogSheet_(ss, source, rowCount) {
   sh.appendRow([new Date(), source, rowCount, ss.getUrl()]);
 }
 
-function jsonOut_(obj, code) {
-  var out = ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
-  return out;
+function jsonOut_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
 
-/** Run once: Triggers → Add → Time-driven → Day timer → 11pm–midnight */
+/** Run once: sets daily trigger ~11pm */
 function installDailyTrigger() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'dailyBackupFromFirebase') ScriptApp.deleteTrigger(t);
@@ -158,4 +267,11 @@ function installDailyTrigger() {
     .everyDays(1)
     .atHour(23)
     .create();
+}
+
+/** Run once after setup — creates folder + README, prints folder URL in logs */
+function setupDriveFolder() {
+  var folder = getOrCreateDriveFolder_();
+  ensureReadmeInFolder_(folder);
+  Logger.log('Drive folder ready: ' + folder.getUrl());
 }
