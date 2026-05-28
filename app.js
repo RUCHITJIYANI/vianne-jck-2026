@@ -3,7 +3,8 @@ let cur=null,ovr=null,acIdx=-1,scanOn=false;
 const STORAGE_KEYS={
   deviceId:'vianne_device_id',
   events:'vianne_events_v1',
-  orders:'vianne_orders_v1'
+  orders:'vianne_orders_v1',
+  userName:'vianne_user_name'
 };
 const MAX_EVENTS=5000;
 let cloudDb=null;
@@ -31,6 +32,9 @@ function getDeviceId(){
     localStorage.setItem(STORAGE_KEYS.deviceId,id);
   }
   return id;
+}
+function getUserName(){
+  return (localStorage.getItem(STORAGE_KEYS.userName)||'Unknown User').trim() || 'Unknown User';
 }
 function nowIso(){return new Date().toISOString();}
 function makeEventId(){
@@ -71,7 +75,7 @@ function pushCloudEvent(evt){
 }
 function pushCloudOrder(code,status,updatedAt){
   if(!cloudReady||!cloudDb) return;
-  const payload={code,status,updatedAt,deviceId:getDeviceId()};
+  const payload={code,status,updatedAt,deviceId:getDeviceId(),userName:getUserName()};
   cloudDb.ref(`${cloudPath('orders')}/${code}`).set(payload).catch((e)=>console.error('Cloud order write failed',e));
 }
 async function fetchCloudEvents(){
@@ -107,7 +111,7 @@ function dedupeEvents(events){
   return out;
 }
 function logEvent(type,code,meta){
-  const evt={ts:nowIso(),deviceId:getDeviceId(),type,code,meta:meta||{}};
+  const evt={ts:nowIso(),deviceId:getDeviceId(),userName:getUserName(),type,code,meta:meta||{}};
   const events=readStore(STORAGE_KEYS.events,[]);
   events.push(evt);
   if(events.length>MAX_EVENTS) events.splice(0,events.length-MAX_EVENTS);
@@ -787,9 +791,9 @@ async function downloadDailyExcel(){
   const events=(useCloud?dedupeEvents(cloudEvents):localEvents).filter(e=>inSelectedRange(e.ts));
   const orders=useCloud?cloudOrders:getOrders();
   const lookupRows=events.filter(e=>e.type==='search').map(e=>[
-    e.ts,String(e.ts).slice(0,10),e.code,e.meta?.design||'',e.meta?.collection||'',e.meta?.style_code||'',e.deviceId||getDeviceId()
+    e.ts,String(e.ts).slice(0,10),e.code,e.meta?.design||'',e.meta?.collection||'',e.meta?.style_code||'',e.deviceId||getDeviceId(),e.userName||'Unknown User'
   ]);
-  const statusRows=Object.entries(orders).map(([code,o])=>[String(o.updatedAt||'').slice(0,10),code,o.status,o.updatedAt,o.deviceId||getDeviceId()]);
+  const statusRows=Object.entries(orders).map(([code,o])=>[String(o.updatedAt||'').slice(0,10),code,o.status,o.updatedAt,o.deviceId||getDeviceId(),o.userName||'Unknown User']);
   const statusHistoryRows=events
     .filter(e=>e.type==='status_change')
     .map(e=>[
@@ -797,7 +801,8 @@ async function downloadDailyExcel(){
       String(e.ts).slice(0,10),
       e.code,
       e.meta?.status||'',
-      e.deviceId||getDeviceId()
+      e.deviceId||getDeviceId(),
+      e.userName||'Unknown User'
     ]);
   const orderedCounts={};
   const soldCounts={};
@@ -830,9 +835,9 @@ async function downloadDailyExcel(){
   try{
     await ensureXlsx();
     const wb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['timestamp','date','product_code','design','collection','style_code','searched_by_device'],...lookupRows]),'Searches');
-    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['date','product_code','current_status','status_updated_at','status_set_by_device'],...statusRows]),'OrderStatusCurrent');
-    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['timestamp','date','product_code','status','status_set_by_device'],...statusHistoryRows]),'OrderStatusHistory');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['timestamp','date','product_code','design','collection','style_code','searched_by_device','searched_by_name'],...lookupRows]),'Searches');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['date','product_code','current_status','status_updated_at','status_set_by_device','status_set_by_name'],...statusRows]),'OrderStatusCurrent');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['timestamp','date','product_code','status','status_set_by_device','status_set_by_name'],...statusHistoryRows]),'OrderStatusHistory');
     XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['product_code','search_count'],...summaryRows]),'MostSearched');
     XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['product_code','ordered_count'],...Object.entries(orderedCounts).sort((a,b)=>b[1]-a[1])]),'MostOrdered');
     XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['product_code','sold_count'],...Object.entries(soldCounts).sort((a,b)=>b[1]-a[1])]),'MostSold');
@@ -842,9 +847,9 @@ async function downloadDailyExcel(){
     XLSX.writeFile(wb,fileName);
     showStatus(`✓ Daily Excel downloaded (${useCloud?'all devices':'this device'})`,'ok');
   } catch(e){
-    const rows=[['row_type','timestamp','date','product_code','design','collection','style_code','status','actor_device']];
-    lookupRows.forEach(r=>rows.push(['search',r[0],r[1],r[2],r[3],r[4],r[5],'',r[6]]));
-    statusHistoryRows.forEach(r=>rows.push(['status_change',r[0],r[1],r[2],'','','',r[3],r[4]]));
+    const rows=[['row_type','timestamp','date','product_code','design','collection','style_code','status','actor_device','actor_name']];
+    lookupRows.forEach(r=>rows.push(['search',r[0],r[1],r[2],r[3],r[4],r[5],'',r[6],r[7]]));
+    statusHistoryRows.forEach(r=>rows.push(['status_change',r[0],r[1],r[2],'','','',r[3],r[4],r[5]]));
     fallbackCsvDownload(rows,fileName);
     showStatus('Excel library blocked; downloaded CSV instead.','err');
   }

@@ -104,30 +104,36 @@ button:active { background: #b8924e; }
     </svg>
   </div>
   <h2>VIANNE JEWELS</h2>
-  <p>JCK 2026 — Private price lookup.<br>Enter your access password to continue.</p>
+  <p>JCK 2026 — Private price lookup.<br>Enter your name and access password.</p>
+  <input type="text" id="nameInput" placeholder="Your Name" autocomplete="name"
+    onkeydown="if(event.key==='Enter') checkLogin()">
   <input type="password" id="passInput" placeholder="Password" autocomplete="current-password"
-    onkeydown="if(event.key==='Enter') checkPass()">
-  <button type="button" onclick="checkPass()">Enter</button>
-  <div id="err" class="err-msg">Incorrect password. Please try again.</div>
+    onkeydown="if(event.key==='Enter') checkLogin()">
+  <button type="button" onclick="checkLogin()">Enter</button>
+  <div id="err" class="err-msg">Enter valid name and password.</div>
 </div>
 
 <script>
 const SECURE_KEY = "VianneNY";
 const AUTH_KEY   = "vianne_jck_auth";
+const USER_KEY   = "vianne_user_name";
 
-if (localStorage.getItem(AUTH_KEY) === "1") {
+if (localStorage.getItem(AUTH_KEY) === "1" && localStorage.getItem(USER_KEY)) {
   window.location.replace("lookup.html");
 }
 
-function checkPass() {
+function checkLogin() {
+  const name = document.getElementById("nameInput").value.trim();
   const p = document.getElementById("passInput").value;
-  if (p === SECURE_KEY) {
+  if (name && p === SECURE_KEY) {
     localStorage.setItem(AUTH_KEY, "1");
+    localStorage.setItem(USER_KEY, name);
     window.location.href = "lookup.html";
   } else {
     document.getElementById("err").style.display = "block";
     document.getElementById("passInput").value = "";
-    document.getElementById("passInput").focus();
+    if (!name) document.getElementById("nameInput").focus();
+    else document.getElementById("passInput").focus();
   }
 }
 </script>
