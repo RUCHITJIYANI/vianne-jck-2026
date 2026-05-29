@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate ITEMS_RAW from JCK price list + optional quotation additions."""
+"""Regenerate ITEMS_RAW from JCK Price List workbooks (1, 2, 3)."""
 
 from __future__ import annotations
 
@@ -10,10 +10,12 @@ from pathlib import Path
 from openpyxl import load_workbook
 
 ROOT = Path(__file__).resolve().parents[1]
-PRIMARY = ROOT / "JCK 2026 Price List.xlsx"
-EXTRA = ROOT / "JCK Price List-3.xlsx"
-if not EXTRA.exists():
-    EXTRA = ROOT / "QO Quotation Additions.xlsx"
+EXCEL_DIR = Path("/Users/rj/Downloads/JCK PRICE LIST")
+SOURCES = [
+    EXCEL_DIR / "JCK Price List-1.xlsx",
+    EXCEL_DIR / "JCK Price List-2.xlsx",
+    EXCEL_DIR / "JCK Price List-3.xlsx",
+]
 OUT = ROOT / "data.js"
 HTML_FILES = [ROOT / "index.html", ROOT / "lookup.html"]
 
@@ -111,16 +113,20 @@ def parse_workbook(path: Path):
     return items
 
 
-def merge_items(primary, extra):
-    by_code = {i["unique_code"].upper(): i for i in primary}
-    added = 0
-    for item in extra:
-        key = item["unique_code"].upper()
-        if key not in by_code:
-            by_code[key] = item
-            added += 1
+def merge_sources(paths):
+    """Later workbooks override earlier entries for the same unique_code."""
+    by_code = {}
+    per_file = {}
+    for path in paths:
+        if not path.exists():
+            print(f"Warning: missing {path}")
+            continue
+        items = parse_workbook(path)
+        per_file[path.name] = len(items)
+        for item in items:
+            by_code[item["unique_code"].upper()] = item
     merged = sorted(by_code.values(), key=lambda x: x["unique_code"])
-    return merged, added
+    return merged, per_file
 
 
 def patch_html(html_path: Path, items_json: str, count: int):
@@ -144,20 +150,22 @@ def patch_html(html_path: Path, items_json: str, count: int):
         raise SystemExit(f"Could not parse ITEMS_RAW array in {html_path}")
     text = text[:idx] + f"const ITEMS_RAW={items_json}" + text[arr_end + 1 :]
     text = re.sub(
-        r"JCK 2026 · \d+ ITEMS",
-        f"JCK 2026 · {count} ITEMS",
+        r'(<span id="hdrItemCount">)\d+(</span> ITEMS)',
+        rf"\g<1>{count}\g<2>",
         text,
     )
     html_path.write_text(text, encoding="utf-8")
 
 
 def main():
-    if not PRIMARY.exists():
-        raise SystemExit(f"Missing workbook: {PRIMARY}")
+    missing = [p for p in SOURCES if not p.exists()]
+    if len(missing) == len(SOURCES):
+        raise SystemExit(f"No workbooks found under {EXCEL_DIR}")
 
-    primary = parse_workbook(PRIMARY)
-    extra = parse_workbook(EXTRA) if EXTRA.exists() else []
-    items, added = merge_items(primary, extra)
+    items, per_file = merge_sources(SOURCES)
+    if not items:
+        raise SystemExit("No items parsed from workbooks")
+
     items_json = json.dumps(items, separators=(",", ":"))
 
     OUT.write_text(
@@ -171,7 +179,9 @@ def main():
         if html.exists():
             patch_html(html, items_json, len(items))
 
-    print(f"Wrote {len(items)} items ({added} from {EXTRA.name}) to {OUT}")
+    print(f"Merged {len(items)} unique items into {OUT}")
+    for name, count in per_file.items():
+        print(f"  {name}: {count} rows parsed")
     for html in HTML_FILES:
         if html.exists():
             print(f"Patched {html.name}")
