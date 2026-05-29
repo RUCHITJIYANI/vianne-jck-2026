@@ -86,10 +86,33 @@ Apps Script → **Project Settings** (gear) → **Script properties**:
 1. Run **`dailyBackupFromFirebase`**
 2. Open Drive folder **Vianne JCK 2026** — you should see the Sheet + a `.csv` file
 
-### Step F — Automatic every night (~11 PM)
+### Step F — Automatic backup (pick one)
 
-1. Run **`installDailyTrigger`** once
-2. **Triggers** (clock icon) → `dailyBackupFromFirebase` daily
+**During the show (backroom sheet updates every ~5 min):**
+
+1. Run **`installShowDayTrigger`** once
+2. **Triggers** (clock icon) → confirm `dailyBackupFromFirebase` every 5 minutes
+
+**After the show (nightly archive ~11 PM):**
+
+1. Run **`installDailyTrigger`** once (replaces the 5-min trigger)
+2. **Triggers** → confirm daily run at ~11 PM
+
+You never need to click **Run** manually again after setting a trigger.
+
+> Google Apps Script cannot refresh every second — **5 minutes** is the practical minimum for Sheets. For true live data, use Firebase Console or the app **History** tab (see below).
+
+---
+
+## Live backroom view (real-time, no delay)
+
+| Where | How live |
+|-------|----------|
+| **Firebase Console** | Every search appears instantly — best for backroom |
+| **App → History tab** | Same cloud data on any logged-in device |
+| **Google Sheet** | Refreshes every 5 min (show mode) or nightly (archive mode) |
+
+Firebase Console: https://console.firebase.google.com/project/vianne-jck-2026/database/vianne-jck-2026-default-rtdb/data → expand **`vianne-jck-2026-prod`** → **`history`**
 
 ---
 
