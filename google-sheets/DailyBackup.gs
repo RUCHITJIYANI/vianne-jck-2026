@@ -114,7 +114,7 @@ function saveCsvToDrive_(folder, historyObj, users) {
 function buildFullCsv_(historyObj, users) {
   var lines = [];
   lines.push('=== SEARCHES ===');
-  lines.push('Date,Time,Code,Style,Design,Collection,Metal,Customer,Price,Method,User,User Name,Role');
+  lines.push('Date,Time,Code,Style,Design,Collection,Metal,Customer,Price,Method,Order Status,User,User Name,Role');
   var list = Object.keys(historyObj || {}).map(function (k) { return historyObj[k]; });
   list.sort(function (a, b) { return (b.ts || '').localeCompare(a.ts || ''); });
   list.forEach(function (e) {
@@ -125,7 +125,7 @@ function buildFullCsv_(historyObj, users) {
       csvCell_(Utilities.formatDate(d, Session.getScriptTimeZone(), 'HH:mm:ss')),
       csvCell_(e.code), csvCell_(e.style), csvCell_(e.design), csvCell_(e.col),
       csvCell_(e.kt), csvCell_(e.cust), csvCell_(e.price), csvCell_(e.method),
-      csvCell_(e.user), csvCell_(e.userName), csvCell_(e.userRole)
+      csvCell_(e.orderStatus), csvCell_(e.user), csvCell_(e.userName), csvCell_(e.userRole)
     ].join(','));
   });
   lines.push('');
@@ -182,7 +182,7 @@ function writeHistorySheet_(ss, historyObj) {
   sh.clear();
   var headers = [
     'Date', 'Time', 'Code', 'Style', 'Design', 'Collection', 'Metal',
-    'Customer', 'Price', 'Method', 'User', 'User Name', 'Role'
+    'Customer', 'Price', 'Method', 'Order Status', 'User', 'User Name', 'Role'
   ];
   sh.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
 
@@ -196,7 +196,7 @@ function writeHistorySheet_(ss, historyObj) {
       Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd'),
       Utilities.formatDate(d, Session.getScriptTimeZone(), 'HH:mm:ss'),
       e.code || '', e.style || '', e.design || '', e.col || '', e.kt || '',
-      e.cust || '', e.price != null ? e.price : '', e.method || '',
+      e.cust || '', e.price != null ? e.price : '', e.method || '', e.orderStatus || '',
       e.user || '', e.userName || '', e.userRole || ''
     ]);
   });
@@ -224,21 +224,23 @@ function writeSummarySheet_(ss, historyObj, users, meta) {
   var sh = ss.getSheetByName(name) || ss.insertSheet(name);
   sh.clear();
   var list = Object.keys(historyObj || {}).map(function (k) { return historyObj[k]; });
-  var codes = {}, custs = {}, scans = 0;
+  var codes = {}, custs = {}, scans = 0, soldDelivered = 0;
   list.forEach(function (e) {
     if (!e) return;
     if (e.code) codes[e.code] = 1;
     if (e.cust) custs[e.cust] = 1;
     if (e.method === 'scan') scans++;
+    if (e.orderStatus === 'sold_delivered') soldDelivered++;
   });
   var uarr = Array.isArray(users) ? users : [];
-  sh.getRange(1, 1, 7, 2).setValues([
+  sh.getRange(1, 1, 8, 2).setValues([
     ['Backup time', new Date()],
     ['Cloud meta', (meta && meta.updatedAt) || ''],
     ['Total searches', list.length],
     ['Unique items', Object.keys(codes).length],
     ['Unique customers', Object.keys(custs).length],
     ['QR scans', scans],
+    ['Sold delivered', soldDelivered],
     ['Active users', uarr.filter(function (u) { return u.active; }).length]
   ]);
   sh.getRange(1, 1, 1, 2).setFontWeight('bold');
@@ -257,16 +259,31 @@ function jsonOut_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
 
-/** Run once: sets daily trigger ~11pm */
+/** Run once after the show: nightly archive ~11 PM */
 function installDailyTrigger() {
-  ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (t.getHandlerFunction() === 'dailyBackupFromFirebase') ScriptApp.deleteTrigger(t);
-  });
+  removeBackupTriggers_();
   ScriptApp.newTrigger('dailyBackupFromFirebase')
     .timeBased()
     .everyDays(1)
     .atHour(23)
     .create();
+  Logger.log('Nightly backup set for ~11 PM');
+}
+
+/** Run once during JCK show: refresh sheet every 5 min (Google minimum; not every second) */
+function installShowDayTrigger() {
+  removeBackupTriggers_();
+  ScriptApp.newTrigger('dailyBackupFromFirebase')
+    .timeBased()
+    .everyMinutes(5)
+    .create();
+  Logger.log('Show-day mode: sheet refreshes every 5 minutes');
+}
+
+function removeBackupTriggers_() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'dailyBackupFromFirebase') ScriptApp.deleteTrigger(t);
+  });
 }
 
 /** Run once after setup — creates folder + README, prints folder URL in logs */
