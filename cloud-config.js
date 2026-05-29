@@ -3,7 +3,7 @@ window.VIANNE_CLOUD_CONFIG = {
 
   appName: "vianne-jck-cloud",
   pathPrefix: "vianne-jck-2026-prod",
-  appVersion: "20260528q",
+  appVersion: "20260528r",
 
   // Optional: daily / on-demand backup to Google Sheets (see GOOGLE-SHEETS-DAILY-BACKUP.md)
   googleSheetBackup: {
