@@ -11,7 +11,9 @@ from openpyxl import load_workbook
 
 ROOT = Path(__file__).resolve().parents[1]
 PRIMARY = ROOT / "JCK 2026 Price List.xlsx"
-EXTRA = ROOT / "QO Quotation Additions.xlsx"
+EXTRA = ROOT / "JCK Price List-3.xlsx"
+if not EXTRA.exists():
+    EXTRA = ROOT / "QO Quotation Additions.xlsx"
 OUT = ROOT / "data.js"
 HTML_FILES = [ROOT / "index.html", ROOT / "lookup.html"]
 
@@ -169,7 +171,7 @@ def main():
         if html.exists():
             patch_html(html, items_json, len(items))
 
-    print(f"Wrote {len(items)} items ({added} from quotation additions) to {OUT}")
+    print(f"Wrote {len(items)} items ({added} from {EXTRA.name}) to {OUT}")
     for html in HTML_FILES:
         if html.exists():
             print(f"Patched {html.name}")
