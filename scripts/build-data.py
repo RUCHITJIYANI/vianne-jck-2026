@@ -69,8 +69,13 @@ def parse_workbook(path: Path):
                 items.append(current)
             coll = clean_str(row[3])
             today_tariff = num(row[20]) if len(row) > 20 else None
-            margin = margin_for(coll)
-            sale_calc = round(today_tariff / margin, 2) if today_tariff and margin else None
+            sale_price = num(row[23]) if len(row) > 23 else None
+            round_off = num(row[24]) if len(row) > 24 else None
+            if sale_price and today_tariff and today_tariff > 0:
+                margin = round(today_tariff / sale_price, 6)
+            else:
+                margin = margin_for(coll)
+            sale_calc = sale_price
             current = {
                 "unique_code": clean_str(code),
                 "style_code": clean_str(row[1]),
@@ -88,7 +93,7 @@ def parse_workbook(path: Path):
                 "inward_tariff": num(row[21]) if len(row) > 21 else None,
                 "margin": margin,
                 "sale_price_calc": sale_calc,
-                "round_off": num(row[24]) if len(row) > 24 else None,
+                "round_off": round_off,
             }
 
         if not current:
@@ -157,6 +162,55 @@ def patch_html(html_path: Path, items_json: str, count: int):
     html_path.write_text(text, encoding="utf-8")
 
 
+def verify_against_workbooks(items: list[dict], paths: list[Path]) -> int:
+    """Return count of mismatches vs Excel source cells."""
+    by_code = {i["unique_code"].upper(): i for i in items}
+    mismatches = 0
+    checks = [
+        (1, "style_code", "style_code"),
+        (2, "design", "design"),
+        (3, "collection", "collection"),
+        (17, "today_cost", "today_cost"),
+        (18, "inward_value", "inward_value"),
+        (20, "today_cost_tariff", "today_cost_tariff"),
+        (21, "inward_tariff", "inward_tariff"),
+        (23, "sale_price_calc", "sale_price_calc"),
+        (24, "round_off", "round_off"),
+    ]
+
+    for path in paths:
+        if not path.exists():
+            continue
+        wb = load_workbook(path, data_only=True)
+        ws = wb.active
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if not row[0]:
+                continue
+            code = clean_str(row[0]).upper()
+            item = by_code.get(code)
+            if not item:
+                print(f"ERROR: {code} in {path.name} missing from merged catalog")
+                mismatches += 1
+                continue
+            for col_idx, field, _ in checks:
+                if len(row) <= col_idx:
+                    continue
+                expected = num(row[col_idx]) if field not in ("style_code", "design", "collection") else clean_str(row[col_idx])
+                actual = item.get(field)
+                if field in ("style_code", "design", "collection"):
+                    if clean_str(actual) != expected:
+                        print(f"MISMATCH {code} {field}: excel={expected!r} app={actual!r}")
+                        mismatches += 1
+                elif expected is not None and actual is not None:
+                    if abs(float(expected) - float(actual)) > 0.02:
+                        print(f"MISMATCH {code} {field}: excel={expected} app={actual}")
+                        mismatches += 1
+                elif (expected is None) != (actual is None):
+                    print(f"MISMATCH {code} {field}: excel={expected} app={actual}")
+                    mismatches += 1
+    return mismatches
+
+
 def main():
     missing = [p for p in SOURCES if not p.exists()]
     if len(missing) == len(SOURCES):
@@ -178,6 +232,10 @@ def main():
     for html in HTML_FILES:
         if html.exists():
             patch_html(html, items_json, len(items))
+
+    bad = verify_against_workbooks(items, SOURCES)
+    if bad:
+        raise SystemExit(f"Verification failed: {bad} mismatch(es) vs Excel")
 
     print(f"Merged {len(items)} unique items into {OUT}")
     for name, count in per_file.items():
