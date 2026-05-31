@@ -13,6 +13,19 @@
 var DEFAULT_DRIVE_FOLDER = 'Vianne JCK 2026';
 
 function dailyBackupFromFirebase() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) {
+    Logger.log('Skipped — previous backup still running');
+    return;
+  }
+  try {
+    dailyBackupFromFirebase_();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function dailyBackupFromFirebase_() {
   var props = PropertiesService.getScriptProperties();
   var dbUrl = props.getProperty('FIREBASE_DB_URL');
   var prefix = props.getProperty('PATH_PREFIX') || 'vianne-jck-2026-prod';
@@ -31,8 +44,14 @@ function dailyBackupFromFirebase() {
 
   var folder = getOrCreateDriveFolder_();
   ensureSpreadsheetInFolder_(ss, folder);
-  saveCsvToDrive_(folder, history, users);
-  ensureReadmeInFolder_(folder);
+
+  // CSV export is slow — only once per 12 hours
+  var now = Date.now();
+  var lastCsv = Number(props.getProperty('LAST_CSV_MS') || '0');
+  if (now - lastCsv > 12 * 3600000) {
+    saveCsvToDrive_(folder, history, users);
+    props.setProperty('LAST_CSV_MS', String(now));
+  }
 
   SpreadsheetApp.flush();
 }
@@ -169,7 +188,7 @@ function ensureReadmeInFolder_(folder) {
 }
 
 function fetchJson_(url) {
-  var resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+  var resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true, timeout: 120 });
   if (resp.getResponseCode() >= 400) return null;
   var text = resp.getContentText();
   if (!text || text === 'null') return null;
@@ -200,9 +219,8 @@ function writeHistorySheet_(ss, historyObj) {
       e.user || '', e.userName || '', e.userRole || ''
     ]);
   });
-  if (rows.length) sh.getRange(2, 1, rows.length, headers.length).setValues(rows);
+  if (rows.length) sh.getRange(2, 1, rows.length + 1, headers.length).setValues(rows);
   sh.setFrozenRows(1);
-  sh.autoResizeColumns(1, headers.length);
 }
 
 function writeUsersSheet_(ss, users) {
@@ -268,6 +286,16 @@ function installDailyTrigger() {
     .atHour(23)
     .create();
   Logger.log('Nightly backup set for ~11 PM');
+}
+
+/** Run during show: refresh sheet every 15 min (safer with 1000+ rows) */
+function installShowDayTrigger15() {
+  removeBackupTriggers_();
+  ScriptApp.newTrigger('dailyBackupFromFirebase')
+    .timeBased()
+    .everyMinutes(15)
+    .create();
+  Logger.log('Show-day mode: sheet refreshes every 15 minutes');
 }
 
 /** Run once during JCK show: refresh sheet every 5 min (Google minimum; not every second) */
