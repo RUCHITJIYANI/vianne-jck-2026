@@ -129,6 +129,9 @@ header{background:var(--teal);padding:0 16px;display:flex;align-items:center;
 .cust-bar input::placeholder{color:var(--mid)}
 .ctag{background:var(--teal);color:var(--gold-l);font-size:.6rem;font-weight:700;
   padding:3px 8px;border-radius:20px;display:none;align-items:center;white-space:nowrap}
+.ctag-on{background:var(--gold-l);color:var(--teal)}
+.cust-clear{border:none;background:rgba(192,57,43,.12);color:var(--red);font-size:.72rem;
+  font-weight:700;padding:4px 8px;border-radius:8px;cursor:pointer;display:none;flex-shrink:0}
 
 /* SCAN BUTTON */
 .btn-scan{width:100%;padding:13px;background:var(--teal);color:var(--gold-l);border:none;
@@ -207,6 +210,7 @@ header{background:var(--teal);padding:0 16px;display:flex;align-items:center;
 .obtn:active{opacity:.85;transform:scale(.98)}
 .orderStatusTag{font-size:.58rem;color:rgba(229,210,160,.85);margin-top:2px;text-align:center;line-height:1.3}
 .sub .sold-line{display:block;margin-top:2px;font-size:.58rem;letter-spacing:.08em;color:rgba(229,210,160,.75)}
+.sub.cloud-sync-line{display:block;margin-top:2px;font-size:.52rem;letter-spacing:.05em;color:rgba(167,215,200,.9);font-weight:500}
 .ph-label{font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;
   color:rgba(229,210,160,.6);margin-bottom:4px}
 .ph-row{display:flex;align-items:baseline;gap:10px;margin-bottom:4px}
@@ -277,6 +281,28 @@ header{background:var(--teal);padding:0 16px;display:flex;align-items:center;
 .hright{text-align:right;flex-shrink:0}
 .hprice{font-size:.9rem;font-weight:700;color:var(--teal)}
 .htime{font-size:.63rem;color:var(--mid);margin-top:2px;line-height:1.4}
+.hist-layout{display:flex;min-height:50vh}
+.hist-cust-panel{width:148px;flex-shrink:0;border-right:1px solid var(--brd);background:var(--cream);
+  display:flex;flex-direction:column;max-height:60vh}
+.hcp-hdr{padding:10px 12px 6px;font-size:.62rem;font-weight:700;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--teal)}
+.hcp-add{margin:0 10px 8px;padding:7px 10px;border:1.5px dashed rgba(27,92,75,.35);border-radius:8px;
+  background:transparent;color:var(--teal);font-size:.68rem;font-weight:700;cursor:pointer}
+.hcp-list{overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1}
+.hcp-item{padding:10px 12px;border-bottom:1px solid var(--brd);cursor:pointer;transition:background .15s;
+  -webkit-tap-highlight-color:transparent}
+.hcp-item:hover{background:rgba(27,92,75,.06)}
+.hcp-item.active{background:var(--teal);color:#fff}
+.hcp-item.active .hcp-cnt{color:rgba(255,255,255,.75)}
+.hcp-name{font-size:.72rem;font-weight:700;line-height:1.25;word-break:break-word}
+.hcp-cnt{font-size:.58rem;color:var(--mid);margin-top:2px}
+.hcp-shop{margin-top:6px;padding:4px 8px;border:none;border-radius:6px;background:rgba(201,168,124,.25);
+  color:var(--teal);font-size:.58rem;font-weight:700;cursor:pointer;width:100%}
+.hcp-item.active .hcp-shop{background:rgba(255,255,255,.18);color:#fff}
+.hist-main{flex:1;min-width:0;display:flex;flex-direction:column}
+.hist-cust-banner{padding:8px 16px;background:rgba(201,168,124,.12);border-bottom:1px solid var(--brd);
+  font-size:.72rem;color:var(--teal);display:none;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.hist-cust-banner.show{display:flex}
 
 /* ANALYTICS */
 .an-body{padding:18px}
@@ -450,6 +476,10 @@ header{background:var(--teal);padding:0 16px;display:flex;align-items:center;
 @media(max-width:599px){
   .user-cards{grid-template-columns:1fr}
   .histUserFilters{padding:8px 12px 0}
+  .hist-layout{flex-direction:column}
+  .hist-cust-panel{width:100%;max-height:130px;border-right:none;border-bottom:1px solid var(--brd)}
+  .hcp-list{display:flex;flex-direction:row;overflow-x:auto;overflow-y:hidden}
+  .hcp-item{min-width:120px;border-bottom:none;border-right:1px solid var(--brd);flex-shrink:0}
 }
 
 </style>
@@ -478,6 +508,7 @@ header{background:var(--teal);padding:0 16px;display:flex;align-items:center;
   </div>
   <div class="hd-r">
     <span class="sub" id="hdrStats">JCK 2026 · <span id="hdrItemCount">471</span> ITEMS<span class="sold-line"><span id="hdrSoldCount">0</span> SOLD DELIVERED</span></span>
+    <span class="sub cloud-sync-line" id="cloudSyncHdr" style="display:none"></span>
     <div class="upill" onclick="toggleMenu()">
       <div class="uavatar" id="uAv">—</div>
       <div><div class="uname" id="uNm"></div><div class="urole" id="uRl"></div></div>
@@ -508,6 +539,7 @@ header{background:var(--teal);padding:0 16px;display:flex;align-items:center;
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       <input type="text" id="custName" placeholder="Customer name (optional)" autocomplete="off"/>
       <span class="ctag" id="custTag">Active</span>
+      <button type="button" class="cust-clear" id="custClear" onclick="clearActiveCustomer()">✕</button>
     </div>
     <button class="btn-scan" id="btnScan" onclick="toggleScanner()">📷 Scan QR Code / Barcode</button>
     <button id="btnStop" onclick="stopScanner()">⏹ Stop Scanner</button>
@@ -561,8 +593,21 @@ header{background:var(--teal);padding:0 16px;display:flex;align-items:center;
       <button class="fbtn"        id="filt-manual" onclick="filtHist('manual')">⌨ Manual</button>
     </div>
     <div class="histUserFilters" id="histUserFilters" style="display:none"></div>
-    <div class="hlist" id="histList">
-      <div class="empty-state"><div class="empty-ico">🕐</div><p>No history yet.</p></div>
+    <div class="hist-layout">
+      <aside class="hist-cust-panel" id="histCustPanel">
+        <div class="hcp-hdr">Customers</div>
+        <button type="button" class="hcp-add" onclick="promptAddCustomer()">+ New customer</button>
+        <div class="hcp-list" id="histCustList"></div>
+      </aside>
+      <div class="hist-main">
+        <div class="hist-cust-banner" id="histCustBanner">
+          <span id="histCustBannerTxt"></span>
+          <button type="button" class="btn-teal" style="font-size:.68rem;padding:6px 12px" onclick="shopForActiveCustomer()">+ Add items</button>
+        </div>
+        <div class="hlist" id="histList">
+          <div class="empty-state"><div class="empty-ico">🕐</div><p>No history yet.</p></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -589,7 +634,7 @@ header{background:var(--teal);padding:0 16px;display:flex;align-items:center;
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script src="cloud-config.js?v=20260529a"></script>
+<script src="cloud-config.js?v=20260530b"></script>
 <script src="images.js?v=20260529b"></script>
 <script>
 
@@ -10728,10 +10773,10 @@ const MTLS = {
   'G14KRG':'14K Rose Gold','G18KRG':'18K Rose Gold',
   'SL925':'Sterling Silver','P950':'Platinum 950','G10KWG':'10K White Gold'
 };
-var cur=null,ovr=null,acIdx=-1,scanOn=false,scanStream=null,scanAF=null,lastScan=0,pendingMethod=null,histFilt='all',barcodeDetector=null;
-const SCOOL=1500,HK='vj_h3',UK='vj_u2',SK='vj_s2',PK='vj_p2',OK='vj_o1',ROOT_USER='ruchit';
+var cur=null,ovr=null,acIdx=-1,scanOn=false,scanStream=null,scanAF=null,lastScan=0,pendingMethod=null,histFilt='all',histCustFilt=null,activeCustomer=null,barcodeDetector=null;
+const SCOOL=1500,HK='vj_h3',UK='vj_u2',SK='vj_s2',PK='vj_p2',OK='vj_o1',CK='vj_c4',AK='vj_ac',ROOT_USER='ruchit';
 var CUSER=null;
-var cloudDb=null,cloudReady=false;
+var cloudDb=null,cloudReady=false,lastCloudSync=0,cloudSyncTimer=null;
 var itemOrders={};
 function getCloudCfg(){return window.VIANNE_CLOUD_CONFIG||{enabled:false};}
 function cloudPath(part){return (getCloudCfg().pathPrefix||'vianne-jck-2026-prod')+'/'+part;}
@@ -10768,6 +10813,25 @@ function mergeMissingDefaultUsers(users){
     if(!have[d.u]){users.push(JSON.parse(JSON.stringify(d)));changed=true;}
   });
   return changed;
+}
+function markCloudSynced(){
+  lastCloudSync=Date.now();
+  updateCloudSyncDisplay();
+}
+function updateCloudSyncDisplay(){
+  var el=ge("cloudSyncHdr");
+  if(!el)return;
+  if(!isCloudAdmin()||!cloudReady||!lastCloudSync){el.style.display="none";return;}
+  el.style.display="block";
+  var sec=Math.floor((Date.now()-lastCloudSync)/1000);
+  var txt="just now";
+  if(sec>=3600)txt=Math.floor(sec/3600)+" hr ago";
+  else if(sec>=60)txt=Math.floor(sec/60)+" min ago";
+  el.textContent="☁ Last synced: "+txt;
+}
+function startCloudSyncClock(){
+  if(cloudSyncTimer)return;
+  cloudSyncTimer=setInterval(updateCloudSyncDisplay,15000);
 }
 async function initCloud(){
   var cfg=getCloudCfg();
@@ -10812,6 +10876,7 @@ async function initCloud(){
       var val=snap.val();
       if(!val)mergeHistoryCloud([]);
       else mergeHistoryCloud(Object.values(val).filter(Boolean));
+      markCloudSynced();
       updateBadge(historyForView().length);
       if(ge('fp-history')&&ge('fp-history').style.display==='block')renderHist();
       if(ge('fp-analytics')&&ge('fp-analytics').style.display==='block')renderAnalytics();
@@ -10820,6 +10885,7 @@ async function initCloud(){
     mergeOrdersCloud(osnap.val());
     cloudDb.ref(cloudPath('orders')).on('value',function(snap){
       mergeOrdersCloud(snap.val());
+      markCloudSynced();
       if(cur)renderCard();
     });
     cloudDb.ref(cloudPath('meta')).on('value',function(snap){
@@ -10827,6 +10893,8 @@ async function initCloud(){
     });
     pushMetaCloud();
     maybeDailyGoogleBackup();
+    markCloudSynced();
+    startCloudSyncClock();
     return true;
   }catch(err){console.error('[VJ Cloud]',err);return false;}
 }
@@ -10861,7 +10929,8 @@ function pushMetaCloud(){
     historyCount:h.length,
     userCount:loadUsers().length,
     appVersion:getAppVersion()
-  }).catch(function(e){console.error('[VJ Cloud] meta',e);});
+  }).then(function(){markCloudSynced();})
+    .catch(function(e){console.error('[VJ Cloud] meta',e);});
 }
 function clearCloudHistory(){
   if(!cloudReady||!cloudDb)return;
@@ -11051,6 +11120,7 @@ function doLogout(){
   ge("loginUser").value="";ge("loginPass").value="";ge("lErr").className="l-err";
   ge("loginScreen").style.display="flex";ge("mainApp").style.display="none";
   if(scanOn)stopScanner();
+  updateCloudSyncDisplay();
 }
 function checkSession(){
   try{
@@ -11063,12 +11133,14 @@ function checkSession(){
 }
 function startApp(){
   ge("loginScreen").style.display="none";ge("mainApp").style.display="block";
+  restoreActiveCustomer();
   applyPerms();buildPill();updateBadge(historyForView().length);updateHeaderStats();switchTab("lookup");
   initCloud().then(function(ok){
     if(ok){
       applyPerms();updateBadge(historyForView().length);updateHeaderStats();
       setSt("☁️ Cloud sync active — all devices share data","ok");
     }
+    updateCloudSyncDisplay();
   });
   setTimeout(function(){var el=ge("codeInput");if(el)el.focus();},200);
 }
@@ -11225,11 +11297,13 @@ function pushOrderCloud(code,status,cust){
     code:String(code).toUpperCase(),status:status,cust:cust||null,
     user:CUSER?CUSER.u:null,userName:CUSER?CUSER.n:null,
     ts:new Date().toISOString()
-  }).catch(function(e){console.error('[VJ Cloud] order',e);});
+  }).then(function(){markCloudSynced();})
+    .catch(function(e){console.error('[VJ Cloud] order',e);});
 }
 function removeOrderCloud(code){
   if(!cloudReady||!cloudDb)return;
   cloudDb.ref(cloudPath('orders/'+String(code).toUpperCase())).remove()
+    .then(function(){markCloudSynced();})
     .catch(function(e){console.error('[VJ Cloud] order undo',e);});
 }
 function logOrderAction(status){
@@ -11456,7 +11530,9 @@ function saveH(a,skipMeta){try{localStorage.setItem(HK,JSON.stringify(a));}catch
 function updateBadge(n){var b=ge("tab-history");if(b)b.textContent=n?("🕐 History ("+n+")"):"🕐 History";}
 function addH(code,item,price,method,orderStatus,custOverride){
   var h=loadH();
-  var cn=ge("custName");var cust=custOverride!=null?custOverride:(cn?cn.value.trim():"");
+  var cn=ge("custName");
+  var cust=custOverride!=null?custOverride:(activeCustomer||(cn?cn.value.trim():""));
+  if(cust&&!activeCustomer)setActiveCustomer(cust,false);
   h.unshift({
     id:Date.now(),ts:new Date().toISOString(),
     code:code,method:method,
@@ -11470,6 +11546,148 @@ function addH(code,item,price,method,orderStatus,custOverride){
   var entry=h[0];
   saveH(h);updateBadge(historyForView().length);
   pushHistoryCloud(entry);
+}
+function getCustomerCounts(){
+  var c={};
+  historyForView().forEach(function(e){
+    if(!e.cust)return;
+    c[e.cust]=(c[e.cust]||0)+1;
+  });
+  return c;
+}
+function getCustomerList(){
+  var map={}, out=[];
+  function add(n){
+    n=(n||"").trim();
+    if(!n)return;
+    var key=n.toLowerCase();
+    if(map[key])return;
+    map[key]=n;
+    out.push(n);
+  }
+  historyForView().forEach(function(e){add(e.cust);});
+  try{
+    var saved=JSON.parse(localStorage.getItem(CK)||"[]");
+    if(Array.isArray(saved))saved.forEach(add);
+  }catch(e){}
+  out.sort(function(a,b){return a.localeCompare(b,{sensitivity:"base"});});
+  return out;
+}
+function saveCustomerName(name){
+  name=(name||"").trim();
+  if(!name)return;
+  try{
+    var saved=JSON.parse(localStorage.getItem(CK)||"[]");
+    if(!Array.isArray(saved))saved=[];
+    if(!saved.some(function(x){return String(x).toLowerCase()===name.toLowerCase();})){
+      saved.push(name);
+      localStorage.setItem(CK,JSON.stringify(saved));
+    }
+  }catch(e){}
+}
+function setActiveCustomer(name,updateHistFilter){
+  name=(name||"").trim();
+  activeCustomer=name||null;
+  try{
+    if(activeCustomer)localStorage.setItem(AK,activeCustomer);
+    else localStorage.removeItem(AK);
+  }catch(e){}
+  if(activeCustomer)saveCustomerName(activeCustomer);
+  var ci=ge("custName"),ct=ge("custTag"),cc=ge("custClear");
+  if(ci){
+    ci.value=activeCustomer||"";
+    ci.placeholder=activeCustomer?("Adding for "+activeCustomer+" — change name if needed"):"Customer name (optional)";
+  }
+  if(ct){
+    if(activeCustomer){
+      ct.textContent="✓ "+activeCustomer;
+      ct.style.display="inline-flex";
+      ct.className="ctag ctag-on";
+    }else{
+      ct.textContent="Active";
+      ct.style.display="none";
+      ct.className="ctag";
+    }
+  }
+  if(cc)cc.style.display=activeCustomer?"inline-flex":"none";
+  if(updateHistFilter!==false)histCustFilt=activeCustomer;
+  updateHistCustBanner();
+  renderHistCustomers();
+  if(ge("fp-history")&&ge("fp-history").style.display==="block")renderHist();
+}
+function clearActiveCustomer(){
+  setActiveCustomer(null);
+  setSt("Customer cleared — lookups are not tied to a name","ok");
+}
+function restoreActiveCustomer(){
+  try{
+    var n=localStorage.getItem(AK);
+    if(n&&n.trim())setActiveCustomer(n.trim(),false);
+  }catch(e){}
+}
+function selectHistCustomer(name){
+  if(!name){
+    histCustFilt=null;
+    updateHistCustBanner();
+    renderHistCustomers();
+    renderHist();
+    return;
+  }
+  setActiveCustomer(name,true);
+}
+function shopForCustomer(name){
+  setActiveCustomer(name,true);
+  switchTab("lookup");
+  setSt("Adding items for "+name+" — search or scan jewels","ok");
+}
+function shopForActiveCustomer(){
+  if(!activeCustomer){promptAddCustomer();return;}
+  shopForCustomer(activeCustomer);
+}
+function promptAddCustomer(){
+  var n=prompt("Customer name:");
+  if(n===null)return;
+  n=n.trim();
+  if(!n)return;
+  saveCustomerName(n);
+  shopForCustomer(n);
+}
+function updateHistCustBanner(){
+  var b=ge("histCustBanner"),t=ge("histCustBannerTxt");
+  if(!b||!t)return;
+  if(histCustFilt){
+    var counts=getCustomerCounts();
+    b.className="hist-cust-banner show";
+    t.textContent="👤 "+histCustFilt+" · "+(counts[histCustFilt]||0)+" item(s)";
+  }else{
+    b.className="hist-cust-banner";
+    t.textContent="";
+  }
+}
+function renderHistCustomers(){
+  var el=ge("histCustList");if(!el)return;
+  var list=getCustomerList();
+  var counts=getCustomerCounts();
+  var html="";
+  var allCls=!histCustFilt?" active":"";
+  html+="<div class=\"hcp-item"+allCls+"\" onclick=\"selectHistCustomer(null)\">"
+    +"<div class=\"hcp-name\">All customers</div>"
+    +"<div class=\"hcp-cnt\">"+historyForView().length+" total</div></div>";
+  if(!list.length){
+    html+="<div class=\"hcp-item\" style=\"cursor:default;opacity:.7\"><div class=\"hcp-name\">No names yet</div>"
+      +"<div class=\"hcp-cnt\">Tap + New customer</div></div>";
+  }
+  list.forEach(function(name){
+    var active=histCustFilt&&histCustFilt.toLowerCase()===name.toLowerCase();
+    var cls=active?" active":"";
+    var jsName=JSON.stringify(name);
+    html+="<div class=\"hcp-item"+cls+"\" onclick=\"selectHistCustomer("+jsName+")\">"
+      +"<div class=\"hcp-name\">👤 "+name+"</div>"
+      +"<div class=\"hcp-cnt\">"+(counts[name]||0)+" item(s)</div>"
+      +"<button type=\"button\" class=\"hcp-shop\" onclick=\"event.stopPropagation();shopForCustomer("+jsName+")\">+ Add items</button>"
+      +"</div>";
+  });
+  el.innerHTML=html;
 }
 function renderHistFilters(){
   var h=loadH();
@@ -11493,6 +11711,8 @@ function renderHistFilters(){
 }
 function renderHist(){
   renderHistFilters();
+  renderHistCustomers();
+  updateHistCustBanner();
   var el=ge("histList");if(!el)return;
   var h=historyForView();
   var filtered;
@@ -11500,8 +11720,12 @@ function renderHist(){
   else if(histFilt==="scan"||histFilt==="manual") filtered=h.filter(function(e){return e.method===histFilt;});
   else if(isCloudAdmin()&&histFilt.indexOf("user:")===0){filtered=h.filter(function(e){return e.user===histFilt.slice(5);});}
   else filtered=h;
+  if(histCustFilt){
+    filtered=filtered.filter(function(e){return e.cust&&e.cust.toLowerCase()===histCustFilt.toLowerCase();});
+  }
   if(!filtered.length){
-    el.innerHTML="<div class=\"empty-state\"><div class=\"empty-ico\">🕐</div><p>No "+(histFilt==="all"?"":histFilt+" ")+"history yet.</p></div>";
+    var msg=histCustFilt?("No items for "+histCustFilt+" yet. Tap \"+ Add items\" to start."):"No history yet.";
+    el.innerHTML="<div class=\"empty-state\"><div class=\"empty-ico\">🕐</div><p>"+msg+"</p></div>";
     return;
   }
   var rows="";
@@ -11819,8 +12043,22 @@ function tPerm(role,key,btn){
   if(CUSER&&CUSER.r===role){applyPerms();}
 }
 (function(){
-  var ci=ge("custName"),ct=ge("custTag");
-  if(ci)ci.addEventListener("input",function(){if(ct)ct.style.display=ci.value.trim()?"inline-flex":"none";});
+  var ci=ge("custName"),ct=ge("custTag"),cc=ge("custClear");
+  if(ci)ci.addEventListener("input",function(){
+    var v=ci.value.trim();
+    if(!v){
+      if(activeCustomer)clearActiveCustomer();
+      else{if(ct)ct.style.display="none";if(cc)cc.style.display="none";}
+      return;
+    }
+    if(ct){ct.textContent="✓ "+v;ct.className="ctag ctag-on";ct.style.display="inline-flex";}
+    if(cc)cc.style.display="inline-flex";
+    if(!activeCustomer||activeCustomer.toLowerCase()!==v.toLowerCase()){
+      activeCustomer=v;
+      try{localStorage.setItem(AK,v);}catch(e){}
+      saveCustomerName(v);
+    }
+  });
 })();
 document.addEventListener("click",function(e){
   if(!e.target.closest(".acw")){var l=ge("acList");if(l)l.style.display="none";}
