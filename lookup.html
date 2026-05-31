@@ -127,6 +127,11 @@ header{background:var(--teal);padding:0 16px;display:flex;align-items:center;
 .cust-bar input{flex:1;border:none;background:transparent;font-size:16px;
   color:var(--ink);outline:none;padding:0}
 .cust-bar input::placeholder{color:var(--mid)}
+.cust-bar.locked{background:rgba(201,168,124,.14);border-color:rgba(201,168,124,.4)}
+.cust-bar.locked input{color:var(--teal);font-weight:600;cursor:default}
+.cust-active-banner{background:rgba(201,168,124,.18);border:1px solid rgba(201,168,124,.35);border-radius:10px;
+  padding:8px 12px;margin-bottom:10px;font-size:.72rem;color:var(--teal);font-weight:600;display:none}
+.cust-active-banner.show{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .ctag{background:var(--teal);color:var(--gold-l);font-size:.6rem;font-weight:700;
   padding:3px 8px;border-radius:20px;display:none;align-items:center;white-space:nowrap}
 .ctag-on{background:var(--gold-l);color:var(--teal)}
@@ -278,7 +283,9 @@ header{background:var(--teal);padding:0 16px;display:flex;align-items:center;
 .hbadge.order_it{background:rgba(27,92,75,.15);color:var(--teal)}
 .hbadge.undo{background:rgba(127,140,141,.15);color:#566573}
 .hbadge.manual{background:rgba(201,168,124,.15);color:#8a6030}
-.hright{text-align:right;flex-shrink:0}
+.hright{text-align:right;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.hdel{border:none;background:rgba(192,57,43,.1);color:var(--red);font-size:.62rem;font-weight:700;
+  padding:4px 8px;border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .hprice{font-size:.9rem;font-weight:700;color:var(--teal)}
 .htime{font-size:.63rem;color:var(--mid);margin-top:2px;line-height:1.4}
 .hist-layout{display:flex;min-height:50vh}
@@ -535,7 +542,11 @@ header{background:var(--teal);padding:0 16px;display:flex;align-items:center;
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       Find Jewel
     </div>
-    <div class="cust-bar">
+    <div class="cust-active-banner" id="custActiveBanner">
+      <span id="custActiveBannerTxt"></span>
+      <button type="button" class="btn-teal" style="font-size:.65rem;padding:5px 10px" onclick="switchTab('history')">View list</button>
+    </div>
+    <div class="cust-bar" id="custBar">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       <input type="text" id="custName" placeholder="Customer name (optional)" autocomplete="off"/>
       <span class="ctag" id="custTag">Active</span>
@@ -634,7 +645,7 @@ header{background:var(--teal);padding:0 16px;display:flex;align-items:center;
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script src="cloud-config.js?v=20260530b"></script>
+<script src="cloud-config.js?v=20260530c"></script>
 <script src="images.js?v=20260529b"></script>
 <script>
 
@@ -11306,14 +11317,19 @@ function removeOrderCloud(code){
     .then(function(){markCloudSynced();})
     .catch(function(e){console.error('[VJ Cloud] order undo',e);});
 }
+function getActiveCustomerName(){
+  if(activeCustomer)return activeCustomer;
+  var cn=ge("custName");
+  return cn?(cn.value.trim()||null):null;
+}
 function logOrderAction(status){
   if(!cur)return;
-  var cust=null;
-  if(status==="sold_delivered"){
+  var cust=getActiveCustomerName();
+  if(status==="sold_delivered"&&!cust){
     var cn=prompt("Customer name (optional — leave blank to skip):","");
     if(cn===null)return;
     cust=(cn||"").trim()||null;
-    if(cust){var ci=ge("custName");if(ci)ci.value=cust;}
+    if(cust)setActiveCustomer(cust,false);
   }
   var dp=ovr!=null?ovr:(cur.round_off||cur.sale_price_calc);
   addH(cur.unique_code,cur,dp,pendingMethod||"manual",status,cust);
@@ -11531,7 +11547,7 @@ function updateBadge(n){var b=ge("tab-history");if(b)b.textContent=n?("🕐 Hist
 function addH(code,item,price,method,orderStatus,custOverride){
   var h=loadH();
   var cn=ge("custName");
-  var cust=custOverride!=null?custOverride:(activeCustomer||(cn?cn.value.trim():""));
+  var cust=custOverride!=null?custOverride:getActiveCustomerName();
   if(cust&&!activeCustomer)setActiveCustomer(cust,false);
   h.unshift({
     id:Date.now(),ts:new Date().toISOString(),
@@ -11593,10 +11609,16 @@ function setActiveCustomer(name,updateHistFilter){
     else localStorage.removeItem(AK);
   }catch(e){}
   if(activeCustomer)saveCustomerName(activeCustomer);
-  var ci=ge("custName"),ct=ge("custTag"),cc=ge("custClear");
+  var ci=ge("custName"),ct=ge("custTag"),cc=ge("custClear"),bar=ge("custBar"),ban=ge("custActiveBanner"),btxt=ge("custActiveBannerTxt");
   if(ci){
     ci.value=activeCustomer||"";
-    ci.placeholder=activeCustomer?("Adding for "+activeCustomer+" — change name if needed"):"Customer name (optional)";
+    ci.readOnly=!!activeCustomer;
+    ci.placeholder=activeCustomer?activeCustomer:"Customer name (optional)";
+  }
+  if(bar)bar.classList.toggle("locked",!!activeCustomer);
+  if(ban&&btxt){
+    if(activeCustomer){ban.className="cust-active-banner show";btxt.textContent="👤 Adding items for: "+activeCustomer;}
+    else ban.className="cust-active-banner";
   }
   if(ct){
     if(activeCustomer){
@@ -11616,8 +11638,19 @@ function setActiveCustomer(name,updateHistFilter){
   if(ge("fp-history")&&ge("fp-history").style.display==="block")renderHist();
 }
 function clearActiveCustomer(){
-  setActiveCustomer(null);
-  setSt("Customer cleared — lookups are not tied to a name","ok");
+  activeCustomer=null;
+  histCustFilt=null;
+  try{localStorage.removeItem(AK);}catch(e){}
+  var ci=ge("custName"),ct=ge("custTag"),cc=ge("custClear"),bar=ge("custBar"),ban=ge("custActiveBanner");
+  if(ci){ci.value="";ci.readOnly=false;ci.placeholder="Customer name (optional)";}
+  if(bar)bar.classList.remove("locked");
+  if(ban)ban.className="cust-active-banner";
+  if(ct){ct.style.display="none";ct.className="ctag";}
+  if(cc)cc.style.display="none";
+  updateHistCustBanner();
+  renderHistCustomers();
+  if(ge("fp-history")&&ge("fp-history").style.display==="block")renderHist();
+  setSt("Customer cleared","ok");
 }
 function restoreActiveCustomer(){
   try{
@@ -11634,11 +11667,12 @@ function selectHistCustomer(name){
     return;
   }
   setActiveCustomer(name,true);
+  switchTab("history");
 }
 function shopForCustomer(name){
   setActiveCustomer(name,true);
   switchTab("lookup");
-  setSt("Adding items for "+name+" — search or scan jewels","ok");
+  setSt("Adding for "+name+" — search or scan (name already set)","ok");
 }
 function shopForActiveCustomer(){
   if(!activeCustomer){promptAddCustomer();return;}
@@ -11742,23 +11776,41 @@ function renderHist(){
     var ob=e.orderStatus?" <span class=\"hbadge "+e.orderStatus+"\">"+orderStatusLabel(e.orderStatus,e.undoOf)+"</span>":"";
     var pr=(e.price!=null&&!isNaN(Number(e.price)))?("$"+Number(e.price).toLocaleString("en-US",{minimumFractionDigits:0})):"—";
     var ub=e.userName?"<div class=\"hlookupby\">🔐 "+e.userName+(e.userRole?" ("+e.userRole+")":"")+"</div>":"";
-    rows+="<div class=\"hitem\" data-code=\""+(e.code||"")+"\" onclick=\"histClick(this.dataset.code)\">"
+    var delBtn=histCustFilt?"<button type=\"button\" class=\"hdel\" onclick=\"event.stopPropagation();deleteHistoryEntry("+e.id+")\" title=\"Remove\">✕ Remove</button>":"";
+    rows+="<div class=\"hitem\" data-code=\""+(e.code||"")+"\" data-cust=\""+(e.cust||"").replace(/"/g,"&quot;")+"\" onclick=\"histClick(this.dataset.code,this.dataset.cust)\">"
       +th+"<div class=\"hinfo\">"
         +"<div class=\"hcode\">"+(e.code||"—")+" "+mb+ob+"</div>"
         +"<div class=\"hmeta\">"+(e.design||"")+(e.col?" · "+e.col:"")+(e.kt?" · "+e.kt:"")+"</div>"
         +ch+ub
       +"</div>"
-      +"<div class=\"hright\"><div class=\"hprice\">"+pr+"</div><div class=\"htime\">"+ds+"<br>"+ts+"</div></div>"
+      +"<div class=\"hright\"><div class=\"hprice\">"+pr+"</div><div class=\"htime\">"+ds+"<br>"+ts+"</div>"+delBtn+"</div>"
       +"</div>";
   }
   el.innerHTML=rows;
 }
-function histClick(code){
+function histClick(code,cust){
   if(!code)return;
+  if(cust)setActiveCustomer(cust,false);
   switchTab("lookup");
   var ci=ge("codeInput");if(ci)ci.value=code;
   onCode(code);
   if(ITEMS[code.toUpperCase()])showItem(code.toUpperCase());
+}
+function deleteHistoryEntry(id){
+  if(id==null||id==="")return;
+  if(!confirm("Remove this item from history?"))return;
+  var h=loadH().filter(function(e){return String(e.id)!==String(id);});
+  saveH(h);
+  updateBadge(historyForView().length);
+  if(cloudReady&&cloudDb){
+    cloudDb.ref(cloudPath("history/"+id)).remove()
+      .then(function(){pushMetaCloud();markCloudSynced();})
+      .catch(function(e){console.error("[VJ Cloud] delete history",e);});
+  }
+  renderHist();
+  renderAnalytics();
+  updateHeaderStats();
+  setSt("Item removed","ok");
 }
 function filtHist(t){
   if(!isCloudAdmin()&&t.indexOf("user:")===0)t="all";
@@ -12045,6 +12097,7 @@ function tPerm(role,key,btn){
 (function(){
   var ci=ge("custName"),ct=ge("custTag"),cc=ge("custClear");
   if(ci)ci.addEventListener("input",function(){
+    if(ci.readOnly)return;
     var v=ci.value.trim();
     if(!v){
       if(activeCustomer)clearActiveCustomer();
